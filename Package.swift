@@ -23,7 +23,10 @@ let package = Package(
         ),
         .testTarget(
             name: "HummingbirdPostgresTests",
-            dependencies: ["HummingbirdPostgres"]
+            dependencies: [
+                "HummingbirdPostgres",
+                .product(name: "HummingbirdXCT", package: "hummingbird"),
+            ]
         ),
     ]
 )
