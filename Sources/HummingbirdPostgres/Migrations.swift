@@ -16,7 +16,7 @@ import Logging
 @_spi(ConnectionPool) import PostgresNIO
 
 /// Protocol for a database migration
-/// 
+///
 /// Requires two functions one to apply the database migration and one to revert it.
 public protocol HBPostgresMigration {
     /// Apply database migration
@@ -34,14 +34,12 @@ public struct HBPostgresMigrationError: Error {
     public let message: String
 }
 
-@_spi(ConnectionPool)
+/// Database migration support
 public final class HBPostgresMigrations {
-    let repository: HBPostgresMigrationRepository
     var migrations: [HBPostgresMigration]
     var reverts: [String: HBPostgresMigration]
 
-    public init(client: PostgresClient) {
-        self.repository = .init(client: client)
+    public init() {
         self.migrations = []
         self.reverts = [:]
     }
@@ -58,20 +56,23 @@ public final class HBPostgresMigrations {
         self.reverts[migration.name] = migration
     }
 
+    /// Apply database migrations
+    @_spi(ConnectionPool)
     @MainActor
-    public func migrate(logger: Logger, dryRun: Bool) async throws {
-        try await self.migrate(migrations: self.migrations, logger: logger, dryRun: dryRun)
+    public func apply(client: PostgresClient, logger: Logger, dryRun: Bool) async throws {
+        try await self.migrate(client: client, migrations: self.migrations, logger: logger, dryRun: dryRun)
     }
 
+    @_spi(ConnectionPool)
     @MainActor
-    public func revert(logger: Logger, dryRun: Bool) async throws {
-        try await self.migrate(migrations: [], logger: logger, dryRun: dryRun)
+    public func revert(client: PostgresClient, logger: Logger, dryRun: Bool) async throws {
+        try await self.migrate(client: client, migrations: [], logger: logger, dryRun: dryRun)
     }
 
-    @MainActor
-    private func migrate(migrations: [HBPostgresMigration], logger: Logger, dryRun: Bool) async throws {
-        _ = try await self.repository.withContext(logger: logger) { context in
-            let storedMigrations = try await self.repository.getAll(context: context)
+    private func migrate(client: PostgresClient, migrations: [HBPostgresMigration], logger: Logger, dryRun: Bool) async throws {
+        let repository = HBPostgresMigrationRepository(client: client)
+        _ = try await repository.withContext(logger: logger) { context in
+            let storedMigrations = try await repository.getAll(context: context)
             let minMigrationCount = min(migrations.count, storedMigrations.count)
             var i = 0
             while i < minMigrationCount, storedMigrations[i] == migrations[i].name {
@@ -87,7 +88,8 @@ public final class HBPostgresMigrations {
                 }
                 logger.info("Reverting \(migration.name)\(dryRun ? " (dry run)" : "")")
                 if !dryRun {
-                    try await self.repository.remove(migration, context: context)
+                    try await migration.revert(connection: context.connection, logger: context.logger)
+                    try await repository.remove(migration, context: context)
                 }
             }
             // Apply migration
@@ -95,7 +97,8 @@ public final class HBPostgresMigrations {
                 let migration = migrations[j]
                 logger.info("Migrating \(migration.name)\(dryRun ? " (dry run)" : "")")
                 if !dryRun {
-                    try await self.repository.add(migration, context: context)
+                    try await migration.apply(connection: context.connection, logger: context.logger)
+                    try await repository.add(migration, context: context)
                 }
             }
         }
@@ -119,7 +122,6 @@ struct HBPostgresMigrationRepository {
     }
 
     func add(_ migration: HBPostgresMigration, context: Context) async throws {
-        try await migration.apply(connection: context.connection, logger: context.logger)
         try await context.connection.query(
             "INSERT INTO _migrations_ (name) VALUES (\(migration.name))",
             logger: context.logger
@@ -127,7 +129,6 @@ struct HBPostgresMigrationRepository {
     }
 
     func remove(_ migration: HBPostgresMigration, context: Context) async throws {
-        try await migration.revert(connection: context.connection, logger: context.logger)
         try await context.connection.query(
             "DELETE FROM _migrations_ WHERE name = \(migration.name)",
             logger: context.logger
