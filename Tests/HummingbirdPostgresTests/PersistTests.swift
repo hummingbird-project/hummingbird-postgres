@@ -79,6 +79,10 @@ final class PersistTests: XCTestCase {
         updateRouter(router, persist)
         var app = HBApplication(responder: router.buildResponder())
         app.addServices(PostgresClientService(client: postgresClient), persist)
+        app.runBeforeServerStart {
+            // temporary fix to ensure persist table is created before we use it
+            try await Task.sleep(for: .milliseconds(400))
+        }
 
         return app
     }
