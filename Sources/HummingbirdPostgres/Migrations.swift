@@ -72,15 +72,16 @@ public final class HBPostgresMigrations {
     private func migrate(client: PostgresClient, migrations: [HBPostgresMigration], logger: Logger, dryRun: Bool) async throws {
         let repository = HBPostgresMigrationRepository(client: client)
         _ = try await repository.withContext(logger: logger) { context in
-            let storedMigrations = try await repository.getAll(context: context)
-            let minMigrationCount = min(migrations.count, storedMigrations.count)
+            // get migrations currently applied in the order they were applied
+            let appliedMigrations = try await repository.getAll(context: context)
+            let minMigrationCount = min(migrations.count, appliedMigrations.count)
             var i = 0
-            while i < minMigrationCount, storedMigrations[i] == migrations[i].name {
+            while i < minMigrationCount, appliedMigrations[i] == migrations[i].name {
                 i += 1
             }
             // Revert deleted migrations, and any migrations after a deleted migration
-            for j in (i..<storedMigrations.count).reversed() {
-                let migrationName = storedMigrations[j]
+            for j in (i..<appliedMigrations.count).reversed() {
+                let migrationName = appliedMigrations[j]
                 // look for migration to revert in migration list and revert dictionary. NB we are looking in the migration
                 // array belonging to the type, not the one supplied to the function
                 guard let migration = self.migrations.first(where: { $0.name == migrationName }) ?? self.reverts[migrationName] else {
