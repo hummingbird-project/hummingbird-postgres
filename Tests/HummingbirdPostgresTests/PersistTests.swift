@@ -21,17 +21,6 @@ import ServiceLifecycle
 import XCTest
 
 final class PersistTests: XCTestCase {
-    /// Manage the lifecycle of a PostgresClient
-    struct PostgresClientService: Service {
-        let client: PostgresClient
-
-        func run() async {
-            await cancelOnGracefulShutdown {
-                await self.client.run()
-            }
-        }
-    }
-
     func createApplication(_ updateRouter: (HBRouter<HBBasicRequestContext>, HBPersistDriver) -> Void = { _, _ in }) async throws -> some HBApplicationProtocol {
         struct PostgresErrorMiddleware<Context: HBBaseRequestContext>: HBMiddlewareProtocol {
             func handle(_ request: HBRequest, context: Context, next: (HBRequest, Context) async throws -> HBResponse) async throws -> HBResponse {

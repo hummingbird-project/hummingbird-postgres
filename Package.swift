@@ -21,10 +21,18 @@ let package = Package(
                 .product(name: "PostgresNIO", package: "postgres-nio"),
             ]
         ),
+        .target(
+            name: "HummingbirdJobsPostgres",
+            dependencies: [
+                .product(name: "HummingbirdJobs", package: "hummingbird"),
+                .product(name: "PostgresNIO", package: "postgres-nio"),
+            ]
+        ),
         .testTarget(
             name: "HummingbirdPostgresTests",
             dependencies: [
                 "HummingbirdPostgres",
+                "HummingbirdJobsPostgres",
                 .product(name: "HummingbirdXCT", package: "hummingbird"),
             ]
         ),
