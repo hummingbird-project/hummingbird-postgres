@@ -30,8 +30,23 @@ extension HBPostgresMigration {
 }
 
 ///  Error thrown by migration code
-public struct HBPostgresMigrationError: Error {
-    public let message: String
+public struct HBPostgresMigrationError: Error, Equatable {
+    enum _Internal {
+        case requiresChanges
+        case cannotRevertMigration
+    }
+
+    private let value: _Internal
+
+    private init(_ value: _Internal) {
+        self.value = value
+    }
+
+    /// The database requires a migration before the application can run
+    static var requiresChanges: Self { .init(.requiresChanges) }
+    /// Cannot revert a migration as we do not have its details. Add it to the revert list using
+    /// HBPostgresMigrations.add(revert:)
+    static var cannotRevertMigration: Self { .init(.cannotRevertMigration) }
 }
 
 /// Database migration support
@@ -72,6 +87,9 @@ public final class HBPostgresMigrations {
     private func migrate(client: PostgresClient, migrations: [HBPostgresMigration], logger: Logger, dryRun: Bool) async throws {
         let repository = HBPostgresMigrationRepository(client: client)
         _ = try await repository.withContext(logger: logger) { context in
+            // setup migration repository (create table)
+            try await repository.setup(context: context)
+            var requiresChanges = false
             // get migrations currently applied in the order they were applied
             let appliedMigrations = try await repository.getAll(context: context)
             let minMigrationCount = min(migrations.count, appliedMigrations.count)
@@ -85,12 +103,14 @@ public final class HBPostgresMigrations {
                 // look for migration to revert in migration list and revert dictionary. NB we are looking in the migration
                 // array belonging to the type, not the one supplied to the function
                 guard let migration = self.migrations.first(where: { $0.name == migrationName }) ?? self.reverts[migrationName] else {
-                    throw HBPostgresMigrationError(message: "Cannot find migration \(migrationName) to revert it.")
+                    throw HBPostgresMigrationError.cannotRevertMigration
                 }
                 logger.info("Reverting \(migration.name)\(dryRun ? " (dry run)" : "")")
                 if !dryRun {
                     try await migration.revert(connection: context.connection, logger: context.logger)
                     try await repository.remove(migration, context: context)
+                } else {
+                    requiresChanges = true
                 }
             }
             // Apply migration
@@ -100,7 +120,13 @@ public final class HBPostgresMigrations {
                 if !dryRun {
                     try await migration.apply(connection: context.connection, logger: context.logger)
                     try await repository.add(migration, context: context)
+                } else {
+                    requiresChanges = true
                 }
+            }
+            // if changes are required
+            guard requiresChanges == false else {
+                throw HBPostgresMigrationError.requiresChanges
             }
         }
     }
@@ -115,30 +141,33 @@ struct HBPostgresMigrationRepository {
 
     let client: PostgresClient
 
-    func withContext(logger: Logger, _ process: (Context) async throws -> Void) async throws {
-        _ = try await self.client.withConnection { connection in
-            try await self.createMigrationsTable(connection: connection, logger: logger)
+    func withContext<Value>(logger: Logger, _ process: (Context) async throws -> Value) async throws -> Value {
+        try await self.client.withConnection { connection in
             try await process(.init(connection: connection, logger: logger))
         }
     }
 
+    func setup(context: Context) async throws {
+        try await self.createMigrationsTable(connection: context.connection, logger: context.logger)
+    }
+
     func add(_ migration: HBPostgresMigration, context: Context) async throws {
         try await context.connection.query(
-            "INSERT INTO _migrations_ (name) VALUES (\(migration.name))",
+            "INSERT INTO _hb_migrations (name) VALUES (\(migration.name))",
             logger: context.logger
         )
     }
 
     func remove(_ migration: HBPostgresMigration, context: Context) async throws {
         try await context.connection.query(
-            "DELETE FROM _migrations_ WHERE name = \(migration.name)",
+            "DELETE FROM _hb_migrations WHERE name = \(migration.name)",
             logger: context.logger
         )
     }
 
     func getAll(context: Context) async throws -> [String] {
         let stream = try await context.connection.query(
-            "SELECT name FROM _migrations_ ORDER BY \"order\"",
+            "SELECT name FROM _hb_migrations ORDER BY \"order\"",
             logger: context.logger
         )
         var result: [String] = []
@@ -151,7 +180,7 @@ struct HBPostgresMigrationRepository {
     private func createMigrationsTable(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
             """
-            CREATE TABLE IF NOT EXISTS _hb_migrations_ (
+            CREATE TABLE IF NOT EXISTS _hb_migrations (
                 "order" SERIAL PRIMARY KEY,
                 "name" text 
             )
