@@ -80,7 +80,7 @@ jobs:
     - name: Convert coverage files
       run: |
         llvm-cov export -format="lcov" \
-          .build/debug/hummingbirdPackageTests.xctest \
+          .build/debug/hummingbird-postgresPackageTests.xctest \
           -ignore-filename-regex="\/Tests\/" \
           -ignore-filename-regex="\/Benchmarks\/" \
           -instr-profile .build/debug/codecov/default.profdata > info.lcov
