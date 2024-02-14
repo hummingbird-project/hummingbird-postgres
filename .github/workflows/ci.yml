@@ -65,13 +65,13 @@ jobs:
       psql:
         image: ${{ matrix.postgres-image }}
         volumes: [ 'pgrunshare:/var/run/postgresql' ]
-      env:
-        POSTGRES_DB: 'test_database'
-        POSTGRES_USER: 'test_user'
-        POSTGRES_PASSWORD: 'test_password'
-        POSTGRES_HOST_AUTH_METHOD: ${{ matrix.postgres-auth }}
-        POSTGRES_INITDB_ARGS: --auth-host=${{ matrix.postgres-auth }}
-        steps:
+        env:
+          POSTGRES_DB: 'test_database'
+          POSTGRES_USER: 'test_user'
+          POSTGRES_PASSWORD: 'test_password'
+          POSTGRES_HOST_AUTH_METHOD: ${{ matrix.postgres-auth }}
+          POSTGRES_INITDB_ARGS: --auth-host=${{ matrix.postgres-auth }}
+    steps:
     - name: Checkout
       uses: actions/checkout@v4
     - name: Test
