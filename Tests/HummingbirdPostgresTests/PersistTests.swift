@@ -32,7 +32,7 @@ final class PersistTests: XCTestCase {
         }
     }
 
-    func createApplication(_ updateRouter: (HBRouter<HBBasicRequestContext>, HBPersistDriver) -> Void = { _, _ in }) throws -> some HBApplicationProtocol {
+    func createApplication(_ updateRouter: (HBRouter<HBBasicRequestContext>, HBPersistDriver) -> Void = { _, _ in }) async throws -> some HBApplicationProtocol {
         struct PostgresErrorMiddleware<Context: HBBaseRequestContext>: HBMiddlewareProtocol {
             func handle(_ request: HBRequest, context: Context, next: (HBRequest, Context) async throws -> HBResponse) async throws -> HBResponse {
                 do {
@@ -47,14 +47,8 @@ final class PersistTests: XCTestCase {
         }
         var logger = Logger(label: "PersistTests")
         logger.logLevel = .debug
-        let postgresClient = PostgresClient(
-            configuration: .init(
-                host: "localhost",
-                username: "hummingbird",
-                password: "hummingbird",
-                database: "hummingbird",
-                tls: .disable
-            ),
+        let postgresClient = try await PostgresClient(
+            configuration: getPostgresConfiguration(),
             backgroundLogger: logger
         )
         let persist = HBPostgresPersistDriver(client: postgresClient, logger: logger)
@@ -85,12 +79,16 @@ final class PersistTests: XCTestCase {
         updateRouter(router, persist)
         var app = HBApplication(responder: router.buildResponder())
         app.addServices(PostgresClientService(client: postgresClient), persist)
+        app.runBeforeServerStart {
+            // temporary fix to ensure persist table is created before we use it
+            try await Task.sleep(for: .milliseconds(400))
+        }
 
         return app
     }
 
     func testSetGet() async throws {
-        let app = try self.createApplication()
+        let app = try await self.createApplication()
         try await app.test(.router) { client in
             let tag = UUID().uuidString
             try await client.XCTExecute(uri: "/persist/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "Persist")) { _ in }
@@ -102,7 +100,7 @@ final class PersistTests: XCTestCase {
     }
 
     func testCreateGet() async throws {
-        let app = try self.createApplication { router, persist in
+        let app = try await self.createApplication { router, persist in
             router.put("/create/:tag") { request, context -> HTTPResponse.Status in
                 let buffer = try await request.body.collect(upTo: .max)
                 let tag = try context.parameters.require("tag")
@@ -121,7 +119,7 @@ final class PersistTests: XCTestCase {
     }
 
     func testDoubleCreateFail() async throws {
-        let app = try self.createApplication { router, persist in
+        let app = try await self.createApplication { router, persist in
             router.put("/create/:tag") { request, context -> HTTPResponse.Status in
                 let buffer = try await request.body.collect(upTo: .max)
                 let tag = try context.parameters.require("tag")
@@ -145,7 +143,7 @@ final class PersistTests: XCTestCase {
     }
 
     func testSetTwice() async throws {
-        let app = try self.createApplication()
+        let app = try await self.createApplication()
         try await app.test(.router) { client in
 
             let tag = UUID().uuidString
@@ -161,7 +159,7 @@ final class PersistTests: XCTestCase {
     }
 
     func testExpires() async throws {
-        let app = try self.createApplication()
+        let app = try await self.createApplication()
         try await app.test(.router) { client in
 
             let tag1 = UUID().uuidString
@@ -184,7 +182,7 @@ final class PersistTests: XCTestCase {
         struct TestCodable: Codable {
             let buffer: String
         }
-        let app = try self.createApplication { router, persist in
+        let app = try await self.createApplication { router, persist in
             router.put("/codable/:tag") { request, context -> HTTPResponse.Status in
                 guard let tag = context.parameters.get("tag") else { throw HBHTTPError(.badRequest) }
                 let buffer = try await request.body.collect(upTo: .max)
@@ -209,7 +207,7 @@ final class PersistTests: XCTestCase {
     }
 
     func testRemove() async throws {
-        let app = try self.createApplication()
+        let app = try await self.createApplication()
         try await app.test(.router) { client in
             let tag = UUID().uuidString
             try await client.XCTExecute(uri: "/persist/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "ThisIsTest1")) { _ in }
@@ -221,7 +219,7 @@ final class PersistTests: XCTestCase {
     }
 
     func testExpireAndAdd() async throws {
-        let app = try self.createApplication()
+        let app = try await self.createApplication()
         try await app.test(.router) { client in
 
             let tag = UUID().uuidString
