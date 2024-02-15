@@ -24,6 +24,7 @@ let package = Package(
         .target(
             name: "HummingbirdJobsPostgres",
             dependencies: [
+                "HummingbirdPostgres",
                 .product(name: "HummingbirdJobs", package: "hummingbird"),
                 .product(name: "PostgresNIO", package: "postgres-nio"),
             ]
