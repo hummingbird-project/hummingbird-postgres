@@ -16,6 +16,7 @@ public final class HBPostgresJobQueue: HBJobQueue {
         case remove
     }
 
+    /// Errors thrown by HBPostgresJobQueue
     public enum PostgresQueueError: Error, CustomStringConvertible {
         case failedToAdd
 
@@ -27,6 +28,7 @@ public final class HBPostgresJobQueue: HBJobQueue {
         }
     }
 
+    /// Job Status
     enum Status: Int16, PostgresCodable {
         case pending = 0
         case processing = 1
