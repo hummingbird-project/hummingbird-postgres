@@ -15,7 +15,7 @@
 import Atomics
 import Hummingbird
 import HummingbirdJobs
-@_spi(ConnectionPool) import HummingbirdJobsPostgres
+@testable @_spi(ConnectionPool) import HummingbirdJobsPostgres
 import HummingbirdXCT
 @_spi(ConnectionPool) import PostgresNIO
 import ServiceLifecycle
@@ -46,7 +46,7 @@ final class JobsTests: XCTestCase {
     /// shutdown correctly
     @discardableResult public func testJobQueue<T>(
         numWorkers: Int,
-        failedJobsInitialization: HBPostgresJobQueue.JobInitialization = .remove,
+        configuration: HBPostgresJobQueue.Configuration = .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
         test: (HBPostgresJobQueue) async throws -> T
     ) async throws -> T {
         var logger = Logger(label: "HummingbirdJobsTests")
@@ -57,6 +57,7 @@ final class JobsTests: XCTestCase {
         )
         let postgresJobQueue = HBPostgresJobQueue(
             client: postgresClient,
+            configuration: configuration,
             logger: logger
         )
         let jobQueueHandler = HBJobQueueHandler(
@@ -69,7 +70,7 @@ final class JobsTests: XCTestCase {
             return try await withThrowingTaskGroup(of: Void.self) { group in
                 let serviceGroup = ServiceGroup(
                     configuration: .init(
-                        services: [jobQueueHandler, PostgresClientService(client: postgresClient)],
+                        services: [PostgresClientService(client: postgresClient), jobQueueHandler],
                         gracefulShutdownSignals: [.sigterm, .sigint],
                         logger: Logger(label: "JobQueueService")
                     )
@@ -78,9 +79,18 @@ final class JobsTests: XCTestCase {
                     try await serviceGroup.run()
                 }
                 try await Task.sleep(for: .seconds(1))
-                let value = try await test(postgresJobQueue)
-                await serviceGroup.triggerGracefulShutdown()
-                return value
+                do {
+                    let value = try await test(postgresJobQueue)
+                    await serviceGroup.triggerGracefulShutdown()
+                    return value
+                } catch let error as PSQLError {
+                    XCTFail("\(String(reflecting: error))")
+                    await serviceGroup.triggerGracefulShutdown()
+                    throw error
+                } catch {
+                    await serviceGroup.triggerGracefulShutdown()
+                    throw error
+                }
             }
         } catch let error as PSQLError {
             XCTFail("\(String(reflecting: error))")
@@ -115,8 +125,8 @@ final class JobsTests: XCTestCase {
 
             await self.wait(for: [TestJob.expectation], timeout: 5)
 
-            // let pendingJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.queueKey).get()
-            // XCTAssertEqual(pendingJobs, 0)
+            let pendingJobs = try await jobQueue.getJobs(withStatus: .pending)
+            XCTAssertEqual(pendingJobs.count, 0)
         }
     }
 
@@ -158,8 +168,8 @@ final class JobsTests: XCTestCase {
             XCTAssertGreaterThan(TestJob.maxRunningJobCounter.load(ordering: .relaxed), 1)
             XCTAssertLessThanOrEqual(TestJob.maxRunningJobCounter.load(ordering: .relaxed), 4)
 
-            // let pendingJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.queueKey).get()
-            // XCTAssertEqual(pendingJobs, 0)
+            let pendingJobs = try await jobQueue.getJobs(withStatus: .pending)
+            XCTAssertEqual(pendingJobs.count, 0)
         }
     }
 
@@ -183,11 +193,10 @@ final class JobsTests: XCTestCase {
             await self.wait(for: [TestJob.expectation], timeout: 5)
             try await Task.sleep(for: .milliseconds(200))
 
-            // let failedJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.failedQueueKey).get()
-            // XCTAssertEqual(failedJobs, 1)
-
-            // let pendingJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.queueKey).get()
-            // XCTAssertEqual(pendingJobs, 0)
+            let failedJobs = try await jobQueue.getJobs(withStatus: .failed)
+            XCTAssertEqual(failedJobs.count, 1)
+            let pendingJobs = try await jobQueue.getJobs(withStatus: .pending)
+            XCTAssertEqual(pendingJobs.count, 0)
         }
     }
 
@@ -195,23 +204,27 @@ final class JobsTests: XCTestCase {
     func testShutdownJob() async throws {
         struct TestJob: HBJob {
             static let name = "testShutdownJob"
+            static let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 1)
             func execute(logger: Logger) async throws {
-                try await Task.sleep(for: .milliseconds(100))
+                Self.expectation.fulfill()
+                try await Task.sleep(for: .seconds(10))
             }
         }
         TestJob.register()
-
-        var logger = Logger(label: "HummingbirdJobsTests")
-        logger.logLevel = .trace
-        let jobQueue = try await self.testJobQueue(numWorkers: 4) { jobQueue in
+        try await self.testJobQueue(numWorkers: 4) { jobQueue in
             try await jobQueue.push(TestJob())
-            return jobQueue
+            await self.wait(for: [TestJob.expectation], timeout: 5)
         }
 
-//        let pendingJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.queueKey).get()
-//        XCTAssertEqual(pendingJobs, 0)
-//        let failedJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.failedQueueKey).get()
-//        XCTAssertEqual(failedJobs, 1)
+        try await self.testJobQueue(
+            numWorkers: 4,
+            configuration: .init(failedJobsInitialization: .doNothing, processingJobsInitialization: .doNothing)
+        ) { jobQueue in
+            let failedJobs = try await jobQueue.getJobs(withStatus: .processing)
+            XCTAssertEqual(failedJobs.count, 1)
+            let pendingJobs = try await jobQueue.getJobs(withStatus: .pending)
+            XCTAssertEqual(pendingJobs.count, 0)
+        }
     }
 
     /// test job fails to decode but queue continues to process
@@ -237,8 +250,9 @@ final class JobsTests: XCTestCase {
             try await jobQueue.push(TestJob2(value: "test"))
             // stall to give job chance to start running
             await self.wait(for: [TestJob2.expectation], timeout: 5)
-            // let pendingJobs = try await jobQueue.redisConnectionPool.llen(of: jobQueue.configuration.queueKey).get()
-            // XCTAssertEqual(pendingJobs, 0)
+
+            let pendingJobs = try await jobQueue.getJobs(withStatus: .pending)
+            XCTAssertEqual(pendingJobs.count, 0)
         }
 
         XCTAssertEqual(TestJob2.value, "test")
@@ -278,9 +292,44 @@ final class JobsTests: XCTestCase {
             XCTAssertFalse(TestJob.finished.load(ordering: .relaxed))
         }
 
-        try await self.testJobQueue(numWorkers: 4, failedJobsInitialization: .rerun) { _ in
+        try await self.testJobQueue(numWorkers: 4, configuration: .init(failedJobsInitialization: .rerun)) { _ in
             await self.wait(for: [TestJob.succeededExpectation], timeout: 10)
             XCTAssertTrue(TestJob.finished.load(ordering: .relaxed))
+        }
+    }
+
+    func testCustomTableNames() async throws {
+        struct TestJob: HBJob {
+            static let name = "testBasic"
+            static let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 10)
+
+            let value: Int
+            func execute(logger: Logger) async throws {
+                print(self.value)
+                try await Task.sleep(for: .milliseconds(Int.random(in: 10..<50)))
+                Self.expectation.fulfill()
+            }
+        }
+        TestJob.register()
+        try await self.testJobQueue(
+            numWorkers: 4,
+            configuration: .init(jobTable: "_test_job_table", jobQueueTable: "_test_job_queue_table")
+        ) { jobQueue in
+            try await jobQueue.push(TestJob(value: 1))
+            try await jobQueue.push(TestJob(value: 2))
+            try await jobQueue.push(TestJob(value: 3))
+            try await jobQueue.push(TestJob(value: 4))
+            try await jobQueue.push(TestJob(value: 5))
+            try await jobQueue.push(TestJob(value: 6))
+            try await jobQueue.push(TestJob(value: 7))
+            try await jobQueue.push(TestJob(value: 8))
+            try await jobQueue.push(TestJob(value: 9))
+            try await jobQueue.push(TestJob(value: 10))
+
+            await self.wait(for: [TestJob.expectation], timeout: 5)
+
+            let pendingJobs = try await jobQueue.getJobs(withStatus: .pending)
+            XCTAssertEqual(pendingJobs.count, 0)
         }
     }
 }

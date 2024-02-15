@@ -10,6 +10,15 @@
       }
     },
     {
+      "identity" : "hummingbird",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/hummingbird-project/hummingbird.git",
+      "state" : {
+        "branch" : "2.x.x-jobs-refactor",
+        "revision" : "fb7e4dd6f5785fc5b21434e1cddf87b050760a48"
+      }
+    },
+    {
       "identity" : "postgres-nio",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/vapor/postgres-nio",
