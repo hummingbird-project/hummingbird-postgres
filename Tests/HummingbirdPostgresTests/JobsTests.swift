@@ -38,7 +38,6 @@ final class JobsTests: XCTestCase {
     }
 
     static let env = HBEnvironment()
-    static let redisHostname = env.get("REDIS_HOSTNAME") ?? "localhost"
 
     /// Helper function for test a server
     ///
@@ -49,8 +48,11 @@ final class JobsTests: XCTestCase {
         configuration: HBPostgresJobQueue.Configuration = .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
         test: (HBPostgresJobQueue) async throws -> T
     ) async throws -> T {
-        var logger = Logger(label: "HummingbirdJobsTests")
-        logger.logLevel = .debug
+        let logger = {
+            var logger = Logger(label: "JobsTests")
+            logger.logLevel = .debug
+            return logger
+        }()
         let postgresClient = try await PostgresClient(
             configuration: getPostgresConfiguration(),
             backgroundLogger: logger
@@ -72,7 +74,7 @@ final class JobsTests: XCTestCase {
                     configuration: .init(
                         services: [PostgresClientService(client: postgresClient), jobQueueHandler],
                         gracefulShutdownSignals: [.sigterm, .sigint],
-                        logger: Logger(label: "JobQueueService")
+                        logger: logger
                     )
                 )
                 group.addTask {
@@ -330,6 +332,79 @@ final class JobsTests: XCTestCase {
 
             let pendingJobs = try await jobQueue.getJobs(withStatus: .pending)
             XCTAssertEqual(pendingJobs.count, 0)
+        }
+    }
+
+    func testMultipleJobQueueHandlers() async throws {
+        struct TestJob: HBJob {
+            static let name = "testMultipleJobQueues"
+            static let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 200)
+
+            let value: Int
+            func execute(logger: Logger) async throws {
+                try await Task.sleep(for: .milliseconds(Int.random(in: 10..<50)))
+                Self.expectation.fulfill()
+            }
+        }
+        TestJob.register()
+        let logger = {
+            var logger = Logger(label: "HummingbirdJobsTests")
+            logger.logLevel = .debug
+            return logger
+        }()
+        let postgresClient = try await PostgresClient(
+            configuration: getPostgresConfiguration(),
+            backgroundLogger: logger
+        )
+        let postgresJobQueue = HBPostgresJobQueue(
+            client: postgresClient,
+            configuration: .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
+            logger: logger
+        )
+        let jobQueueHandler = HBJobQueueHandler(
+            queue: postgresJobQueue,
+            numWorkers: 2,
+            logger: logger
+        )
+        let postgresJobQueue2 = HBPostgresJobQueue(
+            client: postgresClient,
+            configuration: .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
+            logger: logger
+        )
+        let jobQueueHandler2 = HBJobQueueHandler(
+            queue: postgresJobQueue2,
+            numWorkers: 3,
+            logger: logger
+        )
+
+        do {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                let serviceGroup = ServiceGroup(
+                    configuration: .init(
+                        services: [PostgresClientService(client: postgresClient), jobQueueHandler, jobQueueHandler2],
+                        gracefulShutdownSignals: [.sigterm, .sigint],
+                        logger: logger
+                    )
+                )
+                group.addTask {
+                    try await serviceGroup.run()
+                }
+                try await Task.sleep(for: .seconds(1))
+                do {
+                    for i in 0..<200 {
+                        try await postgresJobQueue.push(TestJob(value: i))
+                    }
+                    await self.wait(for: [TestJob.expectation], timeout: 5)
+                    await serviceGroup.triggerGracefulShutdown()
+                } catch {
+                    XCTFail("\(String(reflecting: error))")
+                    await serviceGroup.triggerGracefulShutdown()
+                    throw error
+                }
+            }
+        } catch let error as PSQLError {
+            XCTFail("\(String(reflecting: error))")
+            throw error
         }
     }
 }

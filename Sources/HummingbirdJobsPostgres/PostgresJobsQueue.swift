@@ -147,38 +147,43 @@ public final class HBPostgresJobQueue: HBJobQueue {
     func popFirst() async throws -> HBQueuedJob<JobID>? {
         do {
             return try await self.client.withConnection { connection -> HBQueuedJob? in
-                try Task.checkCancellation()
-                let stream = try await connection.query(
-                    """
-                    DELETE
-                    FROM \(unescaped: self.configuration.jobQueueTable) pse
-                    WHERE pse.job_id =
-                          (SELECT pse_inner.job_id
-                           FROM \(unescaped: self.configuration.jobQueueTable) pse_inner
-                           ORDER BY pse_inner.createdAt ASC
-                               FOR UPDATE SKIP LOCKED
-                           LIMIT 1)
-                    RETURNING pse.job_id
-                    """,
-                    logger: self.logger
-                )
-                guard let jobId = try await stream.decode(UUID.self, context: .default).first(where: { _ in true }) else {
-                    return nil
-                }
-                let stream2 = try await connection.query(
-                    "SELECT job FROM \(unescaped: self.configuration.jobTable) WHERE id = \(jobId)",
-                    logger: self.logger
-                )
-
-                do {
-                    try await self.setStatus(jobId: jobId, status: .processing, connection: connection)
-                    guard let job = try await stream2.decode(HBAnyCodableJob.self, context: .default).first(where: { _ in true }) else {
+                while true {
+                    try Task.checkCancellation()
+                    let stream = try await connection.query(
+                        """
+                        DELETE
+                        FROM \(unescaped: self.configuration.jobQueueTable) pse
+                        WHERE pse.job_id =
+                            (SELECT pse_inner.job_id
+                            FROM \(unescaped: self.configuration.jobQueueTable) pse_inner
+                            ORDER BY pse_inner.createdAt ASC
+                                FOR UPDATE SKIP LOCKED
+                            LIMIT 1)
+                        RETURNING pse.job_id
+                        """,
+                        logger: self.logger
+                    )
+                    // return nil if nothing in queue
+                    guard let jobId = try await stream.decode(UUID.self, context: .default).first(where: { _ in true }) else {
                         return nil
                     }
-                    return HBQueuedJob(id: jobId, job: job.job)
-                } catch {
-                    try await self.setStatus(jobId: jobId, status: .failed, connection: connection)
-                    throw JobQueueError.decodeJobFailed
+                    // select job from job table
+                    let stream2 = try await connection.query(
+                        "SELECT job FROM \(unescaped: self.configuration.jobTable) WHERE id = \(jobId)",
+                        logger: self.logger
+                    )
+
+                    do {
+                        try await self.setStatus(jobId: jobId, status: .processing, connection: connection)
+                        // if failed to find a job in the job table try getting another index
+                        guard let job = try await stream2.decode(HBAnyCodableJob.self, context: .default).first(where: { _ in true }) else {
+                            continue
+                        }
+                        return HBQueuedJob(id: jobId, job: job.job)
+                    } catch {
+                        try await self.setStatus(jobId: jobId, status: .failed, connection: connection)
+                        throw JobQueueError.decodeJobFailed
+                    }
                 }
             }
         } catch let error as PSQLError {
