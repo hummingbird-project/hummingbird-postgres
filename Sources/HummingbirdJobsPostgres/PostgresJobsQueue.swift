@@ -42,19 +42,22 @@ public final class HBPostgresJobQueue: HBJobQueue {
         let pendingJobsInitialization: JobInitialization
         let failedJobsInitialization: JobInitialization
         let processingJobsInitialization: JobInitialization
+        let pollTime: Duration
 
         public init(
             jobTable: String = "_hb_jobs",
             jobQueueTable: String = "_hb_job_queue",
             pendingJobsInitialization: HBPostgresJobQueue.JobInitialization = .doNothing,
             failedJobsInitialization: HBPostgresJobQueue.JobInitialization = .rerun,
-            processingJobsInitialization: HBPostgresJobQueue.JobInitialization = .rerun
+            processingJobsInitialization: HBPostgresJobQueue.JobInitialization = .rerun,
+            pollTime: Duration = .milliseconds(100)
         ) {
             self.jobTable = jobTable
             self.jobQueueTable = jobQueueTable
             self.pendingJobsInitialization = pendingJobsInitialization
             self.failedJobsInitialization = failedJobsInitialization
             self.processingJobsInitialization = processingJobsInitialization
+            self.pollTime = pollTime
         }
     }
 
@@ -272,7 +275,7 @@ extension HBPostgresJobQueue {
                     return job
                 }
                 // we only sleep if we didn't receive a job
-                try await Task.sleep(for: .seconds(1))
+                try await Task.sleep(for: self.queue.configuration.pollTime)
             }
         }
     }
