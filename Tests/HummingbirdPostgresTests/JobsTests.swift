@@ -15,6 +15,7 @@
 import Atomics
 import Hummingbird
 import HummingbirdJobs
+@testable @_spi(ConnectionPool) import HummingbirdPostgres
 @testable @_spi(ConnectionPool) import HummingbirdJobsPostgres
 import HummingbirdXCT
 import NIOConcurrencyHelpers
@@ -50,9 +51,11 @@ final class JobsTests: XCTestCase {
             configuration: getPostgresConfiguration(),
             backgroundLogger: logger
         )
+        let postgresMigrations = HBPostgresMigrations()
         return HBJobQueue(
             HBPostgresQueue(
                 client: postgresClient,
+                migrations: postgresMigrations,
                 configuration: configuration,
                 logger: logger
             ),
@@ -81,9 +84,9 @@ final class JobsTests: XCTestCase {
                 group.addTask {
                     try await serviceGroup.run()
                 }
-                try await Task.sleep(for: .seconds(1))
                 do {
-                    let value = try await test(jobQueue)
+                    try await postgresMigrations.apply(client: postgresClient, logger: logger, dryRun: false)
+                    let value = try await test(postgresJobQueue)
                     await serviceGroup.triggerGracefulShutdown()
                     return value
                 } catch let error as PSQLError {
@@ -314,14 +317,22 @@ final class JobsTests: XCTestCase {
             configuration: getPostgresConfiguration(),
             backgroundLogger: logger
         )
+        let postgresMigrations = HBPostgresMigrations()
         let jobQueue = HBJobQueue(
-            .postgres(client: postgresClient, logger: logger),
+            .postgres(
+                client: postgresClient, 
+                migrations: postgresMigrations, 
+                configuration: .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
+                logger: logger
+            ),
             numWorkers: 2,
             logger: logger
         )
         let jobQueue2 = HBJobQueue(
             HBPostgresQueue(
                 client: postgresClient,
+                migrations: postgresMigrations,
+                configuration: .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
                 logger: logger
             ),
             numWorkers: 2,
@@ -337,20 +348,22 @@ final class JobsTests: XCTestCase {
                     gracefulShutdownSignals: [.sigterm, .sigint],
                     logger: logger
                 )
-            )
-            group.addTask {
-                try await serviceGroup.run()
-            }
-            do {
-                for i in 0..<200 {
-                    try await jobQueue.push(id: jobIdentifer, parameters: i)
+                group.addTask {
+                    try await serviceGroup.run()
                 }
-                await self.wait(for: [expectation], timeout: 5)
-                await serviceGroup.triggerGracefulShutdown()
-            } catch {
-                XCTFail("\(String(reflecting: error))")
-                await serviceGroup.triggerGracefulShutdown()
-                throw error
+                try await postgresMigrations.apply(client: postgresClient, logger: logger, dryRun: false)
+                try await postgresMigrations2.apply(client: postgresClient, logger: logger, dryRun: false)
+                do {
+                    for i in 0..<200 {
+                        try await postgresJobQueue.push(id: jobIdentifer, parameters: i)
+                    }
+                    await self.wait(for: [expectation], timeout: 5)
+                    await serviceGroup.triggerGracefulShutdown()
+                } catch {
+                    XCTFail("\(String(reflecting: error))")
+                    await serviceGroup.triggerGracefulShutdown()
+                    throw error
+                }
             }
         }
     }
