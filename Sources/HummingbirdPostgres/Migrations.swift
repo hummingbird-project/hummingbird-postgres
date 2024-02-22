@@ -27,28 +27,52 @@ public actor HBPostgresMigrations {
     var reverts: [String: HBPostgresMigration]
     var state: State
 
+    /// Initialize a HBPostgresMigrations object
     public init() {
         self.migrations = []
         self.reverts = [:]
         self.state = .waiting([])
     }
 
-    /// Add migration to list of reverts, that can be applied
+    /// Add migration to list of migrations to be be applied
+    /// - Parameter migration: Migration to be applied
     public func add(_ migration: HBPostgresMigration) {
         self.migrations.append(migration)
     }
 
     /// Add migration to list of reverts, that can be applied
+    /// - Parameter migration: Migration to be reverted if necessary
     public func revert(_ migration: HBPostgresMigration) {
         self.reverts[migration.name] = migration
     }
 
     /// Apply database migrations
+    ///
+    /// This function compares the list of applied migrations and the list of desired migrations. If there
+    /// are migrations in the applied list that don't exist in the desired list then every migration after
+    /// the missing migration is reverted. Then every unapplied migration from the desired list is applied.
+    ///
+    /// This means removing a single migration from the desired list will revert every migration after the
+    /// removed migation, changing the order will revert the moved migrations and any migration after.
+    ///
+    /// As migrating can be a destructive process it is best to run this with `dryRun`` set to true by default
+    /// and only run it properly if an error is thrown to indicate a migration is required. But check the list
+    /// of reported migrations and reverts before doing this though.
+    ///
+    /// - Parameters:
+    ///   - client: Postgres client
+    ///   - logger: Logger to use
+    ///   - dryRun: Should migrations actually be applied, or should we just report what would be applied and reverted
     @_spi(ConnectionPool)
     public func apply(client: PostgresClient, groups: [HBMigrationGroup] = [], logger: Logger, dryRun: Bool) async throws {
         try await self.migrate(client: client, migrations: self.migrations, groups: groups, logger: logger, dryRun: dryRun)
     }
 
+    /// Revery database migrations
+    /// - Parameters:
+    ///   - client: Postgres client
+    ///   - logger: Logger to use
+    ///   - dryRun: Should migrations actually be reverted, or should we just report what would be reverted
     @_spi(ConnectionPool)
     public func revert(client: PostgresClient, groups: [HBMigrationGroup] = [], logger: Logger, dryRun: Bool) async throws {
         try await self.migrate(client: client, migrations: [], groups: groups, logger: logger, dryRun: dryRun)
@@ -130,6 +154,7 @@ public actor HBPostgresMigrations {
         self.setCompleted()
     }
 
+    /// Report if the migration process has completed
     public func waitUntilCompleted() async throws {
         switch self.state {
         case .waiting(var continuations):
