@@ -73,7 +73,7 @@ final class PersistTests: XCTestCase {
         var app = HBApplication(responder: router.buildResponder())
         app.addServices(PostgresClientService(client: postgresClient), persist)
         app.runBeforeServerStart {
-            try await postgresMigrations.apply(client: postgresClient, logger: logger, dryRun: false)
+            try await postgresMigrations.apply(client: postgresClient, groups: [.persist], logger: logger, dryRun: false)
         }
 
         return app

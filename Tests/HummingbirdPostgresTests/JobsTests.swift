@@ -351,8 +351,8 @@ final class JobsTests: XCTestCase {
                 group.addTask {
                     try await serviceGroup.run()
                 }
-                try await postgresMigrations.apply(client: postgresClient, logger: logger, dryRun: false)
-                try await postgresMigrations2.apply(client: postgresClient, logger: logger, dryRun: false)
+                try await postgresMigrations.apply(client: postgresClient, groups: [.jobQueue], logger: logger, dryRun: false)
+                try await postgresMigrations2.apply(client: postgresClient, groups: [.jobQueue], logger: logger, dryRun: false)
                 do {
                     for i in 0..<200 {
                         try await postgresJobQueue.push(id: jobIdentifer, parameters: i)

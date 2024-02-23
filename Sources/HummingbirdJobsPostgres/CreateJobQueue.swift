@@ -62,5 +62,6 @@ struct CreateJobQueue: HBPostgresMigration {
 }
 
 extension HBMigrationGroup {
-    static var jobQueue: Self { .init("_hb_jobqueue") }
+    /// JobQueue migration group
+    public static var jobQueue: Self { .init("_hb_jobqueue") }
 }

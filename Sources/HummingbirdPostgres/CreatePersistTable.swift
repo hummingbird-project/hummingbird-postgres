@@ -36,5 +36,11 @@ struct CreatePersistTable: HBPostgresMigration {
         )
     }
 
-    var name: String { "_Create_Persist_Table_"}
+    var name: String { "_Create_Persist_Table_" }
+    var group: HBMigrationGroup { .persist }
+}
+
+extension HBMigrationGroup {
+    /// Persist driver migration group
+    public static var persist: Self { .init("_hb_persist") }
 }
