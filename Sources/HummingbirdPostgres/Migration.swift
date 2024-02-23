@@ -25,7 +25,7 @@ public protocol HBPostgresMigration {
     func revert(connection: PostgresConnection, logger: Logger) async throws
     /// Migration name
     var name: String { get }
-    /// Group of migrations
+    /// Group migration belongs to
     var group: HBMigrationGroup { get }
 }
 
@@ -36,7 +36,24 @@ extension HBPostgresMigration {
     public var group: HBMigrationGroup { .default }
 }
 
-/// Group identifier for a group of migrations
+/// Group identifier for a group of migrations.
+///
+/// Migrations in one group are treated independently of migrations in other groups. You can add a
+/// migration to a group and it will not affect any subsequent migrations not in that group. By default
+/// all migrations belong to the ``HBMigrationGroup.default`` group.
+///
+/// To add a migration to a separate group you first need to define the group by adding a static variable
+/// to `HBMigrationGroup`.
+/// ```
+/// extension HBMigrationGroup {
+///     public static var `myGroup`: Self { .init("myGroup") }
+/// }
+/// ```
+/// After that use to ``HBPostgresMigration.group`` set the group for a migration.
+///
+/// Only use a group different from `.default` if you are certain that the database elements you are
+/// creating within that group will always be independent of everything else in the database. Groups
+/// are useful for libraries that use migrations to setup their database elements.
 public struct HBMigrationGroup: Hashable, Equatable {
     let name: String
 
