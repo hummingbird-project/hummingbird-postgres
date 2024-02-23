@@ -40,17 +40,23 @@ public final class HBPostgresMigrations {
     /// Apply database migrations
     @_spi(ConnectionPool)
     @MainActor
-    public func apply(client: PostgresClient, logger: Logger, dryRun: Bool) async throws {
-        try await self.migrate(client: client, migrations: self.migrations, logger: logger, dryRun: dryRun)
+    public func apply(client: PostgresClient, groups: [HBMigrationGroup] = [], logger: Logger, dryRun: Bool) async throws {
+        try await self.migrate(client: client, migrations: self.migrations, groups: groups, logger: logger, dryRun: dryRun)
     }
 
     @_spi(ConnectionPool)
     @MainActor
-    public func revert(client: PostgresClient, logger: Logger, dryRun: Bool) async throws {
-        try await self.migrate(client: client, migrations: [], logger: logger, dryRun: dryRun)
+    public func revert(client: PostgresClient, groups: [HBMigrationGroup] = [], logger: Logger, dryRun: Bool) async throws {
+        try await self.migrate(client: client, migrations: [], groups: groups, logger: logger, dryRun: dryRun)
     }
 
-    private func migrate(client: PostgresClient, migrations: [HBPostgresMigration], logger: Logger, dryRun: Bool) async throws {
+    private func migrate(
+        client: PostgresClient,
+        migrations: [HBPostgresMigration],
+        groups: [HBMigrationGroup],
+        logger: Logger,
+        dryRun: Bool
+    ) async throws {
         let repository = HBPostgresMigrationRepository(client: client)
         do {
             _ = try await repository.withContext(logger: logger) { context in
@@ -59,8 +65,11 @@ public final class HBPostgresMigrations {
                 var requiresChanges = false
                 // get migrations currently applied in the order they were applied
                 let appliedMigrations = try await repository.getAll(context: context)
-                // work out list of migration groups
-                let groups = Array(Set(migrations.map(\.group) + appliedMigrations.map(\.group)))
+                // if groups array passed in is empty then work out list of migration groups by combining
+                // list of groups from migrations and applied migrations
+                let groups = groups.count == 0
+                    ? (migrations.map(\.group) + appliedMigrations.map(\.group)).uniqueElements
+                    : groups
                 // for each group apply/revert migrations
                 for group in groups {
                     let groupMigrations = migrations.filter { $0.group == group }
@@ -164,5 +173,19 @@ struct HBPostgresMigrationRepository {
             """,
             logger: logger
         )
+    }
+}
+
+extension Array where Element: Equatable {
+    /// The list of unique elements in the list, in the order they are found
+    var uniqueElements: [Element] {
+        self.reduce([]) { result, name in
+            if result.first(where: { $0 == name }) == nil {
+                var result = result
+                result.append(name)
+                return result
+            }
+            return result
+        }
     }
 }
