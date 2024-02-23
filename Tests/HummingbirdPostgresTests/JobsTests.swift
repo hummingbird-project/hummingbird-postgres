@@ -85,7 +85,7 @@ final class JobsTests: XCTestCase {
                     try await serviceGroup.run()
                 }
                 do {
-                    try await postgresMigrations.apply(client: postgresClient, logger: logger, dryRun: false)
+                    try await postgresMigrations.apply(client: postgresClient, groups: [.jobQueue], logger: logger, dryRun: false)
                     let value = try await test(postgresJobQueue)
                     await serviceGroup.triggerGracefulShutdown()
                     return value
