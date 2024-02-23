@@ -50,6 +50,7 @@ public final class HBPostgresPersistDriver: HBPersistDriver {
     let client: PostgresClient
     let logger: Logger
     let tidyUpFrequency: Duration
+    let migrations: HBPostgresMigrations
 
     /// Initialize HBFluentPersistDriver
     /// - Parameters:
@@ -60,6 +61,7 @@ public final class HBPostgresPersistDriver: HBPersistDriver {
         self.client = client
         self.logger = logger
         self.tidyUpFrequency = tidyUpFrequency
+        self.migrations = migrations
         await migrations.add(CreatePersistTable())
     }
 
@@ -138,20 +140,11 @@ public final class HBPostgresPersistDriver: HBPersistDriver {
 /// Service protocol requirements
 extension HBPostgresPersistDriver {
     public func run() async throws {
-        // create table to save persist models
-        _ = try await self.client.withConnection { connection in
-            try await connection.query(
-                """
-                CREATE TABLE IF NOT EXISTS _hb_persist (
-                    "id" text PRIMARY KEY,
-                    "data" json NOT NULL,
-                    "expires" timestamp with time zone NOT NULL
-                )
-                """,
-                logger: self.logger
-            )
-        }
+        self.logger.info("Waiting for persist driver migrations to complete")
+        try await self.migrations.waitUntilCompleted()
+
         // do an initial tidy to clear out expired values
+        self.logger.info("Tidy persist database")
         try await self.tidy()
 
         let timerSequence = AsyncTimerSequence(
