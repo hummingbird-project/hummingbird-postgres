@@ -93,10 +93,16 @@ final class MigrationTests: XCTestCase {
         }
     }
 
-    func getAll(client: PostgresClient) async throws -> [String] {
+    func getAll(client: PostgresClient, groups: [HBMigrationGroup] = [.default]) async throws -> [String] {
         let repository = HBPostgresMigrationRepository(client: client)
         return try await repository.withContext(logger: self.logger) { context in
-            try await repository.getAll(context: context).map(\.name)
+            try await repository.getAll(context: context).compactMap { migration in
+                if groups.first { group in return group == migration.group } != nil {
+                    return migration.name
+                } else {
+                    return nil
+                }
+            }
         }
     }
 
@@ -108,7 +114,7 @@ final class MigrationTests: XCTestCase {
             await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1))
             await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2))
         } verify: { migrations, client in
-            try await migrations.apply(client: client, logger: self.logger, dryRun: false)
+            try await migrations.apply(client: client, groups: [.default], logger: self.logger, dryRun: false)
             order.expect(3)
             let migrations = try await getAll(client: client)
             XCTAssertEqual(migrations.count, 2)
@@ -123,8 +129,8 @@ final class MigrationTests: XCTestCase {
             await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1, revertOrder: 4))
             await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2, revertOrder: 3))
         } verify: { migrations, client in
-            try await migrations.apply(client: client, logger: self.logger, dryRun: false)
-            try await migrations.revert(client: client, logger: self.logger, dryRun: false)
+            try await migrations.apply(client: client, groups: [.default], logger: self.logger, dryRun: false)
+            try await migrations.revert(client: client, groups: [.default], logger: self.logger, dryRun: false)
             order.expect(5)
             let migrations = try await getAll(client: client)
             XCTAssertEqual(migrations.count, 0)
@@ -137,7 +143,7 @@ final class MigrationTests: XCTestCase {
             await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1))
             await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2))
         } verify: { migrations, client in
-            try await migrations.apply(client: client, logger: self.logger, dryRun: false)
+            try await migrations.apply(client: client, groups: [.default], logger: self.logger, dryRun: false)
         }
         try await self.testMigrations { migrations in
             await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1))
@@ -145,7 +151,7 @@ final class MigrationTests: XCTestCase {
             await migrations.add(TestMigration(name: "test3", order: order, applyOrder: 3))
             await migrations.add(TestMigration(name: "test4", order: order, applyOrder: 4))
         } verify: { migrations, client in
-            try await migrations.apply(client: client, logger: self.logger, dryRun: false)
+            try await migrations.apply(client: client, groups: [.default], logger: self.logger, dryRun: false)
             let migrations = try await getAll(client: client)
             order.expect(5)
             XCTAssertEqual(migrations.count, 4)
@@ -163,14 +169,14 @@ final class MigrationTests: XCTestCase {
             await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2))
             await migrations.add(TestMigration(name: "test3", order: order, applyOrder: 3))
         } verify: { migrations, client in
-            try await migrations.apply(client: client, logger: self.logger, dryRun: false)
+            try await migrations.apply(client: client, groups: [.default], logger: self.logger, dryRun: false)
         }
         try await self.testMigrations { migrations in
             await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1))
             await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2))
             await migrations.add(revert: TestMigration(name: "test3", order: order, applyOrder: 3, revertOrder: 4))
         } verify: { migrations, client in
-            try await migrations.apply(client: client, logger: self.logger, dryRun: false)
+            try await migrations.apply(client: client, groups: [.default], logger: self.logger, dryRun: false)
             let migrations = try await getAll(client: client)
             order.expect(5)
             XCTAssertEqual(migrations.count, 2)
@@ -186,7 +192,7 @@ final class MigrationTests: XCTestCase {
             await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2))
             await migrations.add(TestMigration(name: "test3", order: order, applyOrder: 3))
         } verify: { migrations, client in
-            try await migrations.apply(client: client, logger: self.logger, dryRun: false)
+            try await migrations.apply(client: client, groups: [.default], logger: self.logger, dryRun: false)
         }
         try await self.testMigrations { migrations in
             await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1))
@@ -194,7 +200,7 @@ final class MigrationTests: XCTestCase {
             await migrations.add(TestMigration(name: "test4", order: order, applyOrder: 5))
             await migrations.add(revert: TestMigration(name: "test3", order: order, applyOrder: 3, revertOrder: 4))
         } verify: { migrations, client in
-            try await migrations.apply(client: client, logger: self.logger, dryRun: false)
+            try await migrations.apply(client: client, groups: [.default], logger: self.logger, dryRun: false)
             let migrations = try await getAll(client: client)
             order.expect(6)
             XCTAssertEqual(migrations.count, 3)
@@ -206,20 +212,20 @@ final class MigrationTests: XCTestCase {
 
     func testDryRun() async throws {
         do {
-            try await self.testMigrations { migrations in
+            try await self.testMigrations(groups: [.default, .test]) { migrations in
                 await migrations.add(TestMigration(name: "test1"))
                 await migrations.add(TestMigration(name: "test2"))
             } verify: { migrations, client in
-                try await migrations.apply(client: client, logger: self.logger, dryRun: true)
+                try await migrations.apply(client: client, groups: [.default], logger: self.logger, dryRun: true)
             }
             XCTFail("Shouldn't get here")
         } catch let error as HBPostgresMigrationError where error == .requiresChanges {}
-        try await self.testMigrations { migrations in
+        try await self.testMigrations(groups: [.default, .test]) { migrations in
             await migrations.add(TestMigration(name: "test1"))
             await migrations.add(TestMigration(name: "test2"))
         } verify: { migrations, client in
-            try await migrations.apply(client: client, logger: self.logger, dryRun: false)
-            try await migrations.apply(client: client, logger: self.logger, dryRun: true)
+            try await migrations.apply(client: client, groups: [.default], logger: self.logger, dryRun: false)
+            try await migrations.apply(client: client, groups: [.default], logger: self.logger, dryRun: true)
         }
     }
 
@@ -231,7 +237,7 @@ final class MigrationTests: XCTestCase {
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default, .test], logger: self.logger, dryRun: false)
             order.expect(3)
-            let migrations = try await getAll(client: client)
+            let migrations = try await getAll(client: client, groups: [.default, .test])
             XCTAssertEqual(migrations.count, 2)
             XCTAssertEqual(migrations[0], "test1")
             XCTAssertEqual(migrations[1], "test2")
@@ -246,7 +252,7 @@ final class MigrationTests: XCTestCase {
             await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2, group: .test))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default, .test], logger: self.logger, dryRun: false)
-            let migrations = try await getAll(client: client)
+            let migrations = try await getAll(client: client, groups: [.default, .test])
             XCTAssertEqual(migrations[0], "test1")
             XCTAssertEqual(migrations[1], "test2")
         }
@@ -257,7 +263,7 @@ final class MigrationTests: XCTestCase {
             await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2, group: .test))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default, .test], logger: self.logger, dryRun: false)
-            let migrations = try await getAll(client: client)
+            let migrations = try await getAll(client: client, groups: [.default, .test])
             XCTAssertEqual(migrations.count, 3)
             XCTAssertEqual(migrations[0], "test1")
             XCTAssertEqual(migrations[1], "test2")
@@ -274,7 +280,7 @@ final class MigrationTests: XCTestCase {
             await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 3, group: .test))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default, .test], logger: self.logger, dryRun: false)
-            let migrations = try await getAll(client: client)
+            let migrations = try await getAll(client: client, groups: [.default, .test])
             XCTAssertEqual(migrations[0], "test1")
             XCTAssertEqual(migrations[1], "test1_2")
             XCTAssertEqual(migrations[2], "test2")
@@ -286,7 +292,7 @@ final class MigrationTests: XCTestCase {
             await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2, group: .test))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default, .test], logger: self.logger, dryRun: false)
-            let migrations = try await getAll(client: client)
+            let migrations = try await getAll(client: client, groups: [.default, .test])
             XCTAssertEqual(migrations.count, 2)
             XCTAssertEqual(migrations[0], "test1")
             XCTAssertEqual(migrations[1], "test2")
@@ -301,7 +307,7 @@ final class MigrationTests: XCTestCase {
             await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2, group: .test))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default, .test], logger: self.logger, dryRun: false)
-            let migrations = try await getAll(client: client)
+            let migrations = try await getAll(client: client, groups: [.default, .test])
             XCTAssertEqual(migrations.count, 2)
             XCTAssertEqual(migrations[0], "test1")
             XCTAssertEqual(migrations[1], "test2")
@@ -311,7 +317,7 @@ final class MigrationTests: XCTestCase {
             await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1, revertOrder: 3, group: .default))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default], logger: self.logger, dryRun: false)
-            let migrations = try await getAll(client: client)
+            let migrations = try await getAll(client: client, groups: [.default, .test])
             XCTAssertEqual(migrations.count, 2)
             XCTAssertEqual(migrations[0], "test1")
             XCTAssertEqual(migrations[1], "test2")

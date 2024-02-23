@@ -88,7 +88,7 @@ public final class HBPostgresMigrations {
                         guard let migration = self.migrations.first(where: { $0.name == migrationName }) ?? self.reverts[migrationName] else {
                             throw HBPostgresMigrationError.cannotRevertMigration
                         }
-                        logger.info("Reverting \(migration.name)\(dryRun ? " (dry run)" : "")")
+                        logger.info("Reverting \(migration.name) from group \(group.name) \(dryRun ? " (dry run)" : "")")
                         if !dryRun {
                             try await migration.revert(connection: context.connection, logger: context.logger)
                             try await repository.remove(migration, context: context)
@@ -99,7 +99,7 @@ public final class HBPostgresMigrations {
                     // Apply migration
                     for j in i..<groupMigrations.count {
                         let migration = groupMigrations[j]
-                        logger.info("Migrating \(migration.name)\(dryRun ? " (dry run)" : "")")
+                        logger.info("Migrating \(migration.name) from group \(group.name) \(dryRun ? " (dry run)" : "")")
                         if !dryRun {
                             try await migration.apply(connection: context.connection, logger: context.logger)
                             try await repository.add(migration, context: context)
