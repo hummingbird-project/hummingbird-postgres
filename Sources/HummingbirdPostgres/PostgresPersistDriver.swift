@@ -67,10 +67,7 @@ public final class HBPostgresPersistDriver: HBPersistDriver {
         let expires = expires.map { Date.now + Double($0.components.seconds) } ?? Date.distantFuture
         try await self.client.withConnection { connection in
             do {
-                try await connection.query(
-                    "INSERT INTO _hb_psql_persist (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(expires))",
-                    logger: self.logger
-                )
+                _ = try await connection.execute(CreateStatement(key: key, value: value, expires: expires), logger: self.logger)
             } catch let error as PSQLError {
                 if error.serverError == .uniqueViolation {
                     throw HBPersistError.duplicate
@@ -85,52 +82,134 @@ public final class HBPostgresPersistDriver: HBPersistDriver {
     public func set(key: String, value: some Codable, expires: Duration?) async throws {
         let expires = expires.map { Date.now + Double($0.components.seconds) } ?? Date.distantFuture
         _ = try await self.client.withConnection { connection in
-            try await connection.query(
-                """
-                INSERT INTO _hb_psql_persist (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(expires))
-                ON CONFLICT (id)
-                DO UPDATE SET data = \(WrapperObject(value)), expires = \(expires)
-                """,
-                logger: self.logger
-            )
+            _ = try await connection.execute(SetStatement(key: key, value: value, expires: expires), logger: self.logger)
         }
     }
 
     /// Get value for key
     public func get<Object: Codable>(key: String, as object: Object.Type) async throws -> Object? {
         try await self.client.withConnection { connection in
-            let stream = try await connection.query(
-                "SELECT data, expires FROM _hb_psql_persist WHERE id = \(key)",
-                logger: self.logger
-            )
-            guard let result = try await stream.decode((WrapperObject<Object>, Date).self)
-                .first(where: { _ in true })
-            else {
-                return nil
-            }
-            guard result.1 > .now else { return nil }
-            return result.0.value
+            let rows = try await connection.execute(GetStatement(key: key), logger: self.logger)
+            guard let row = try await rows.first(where: { _ in true }) else { return nil }
+            guard row.1 > .now else { return nil }
+            return try JSONDecoder().decode(Object.self, from: row.0)
         }
     }
 
     /// Remove key
     public func remove(key: String) async throws {
         _ = try await self.client.withConnection { connection in
-            try await connection.query(
-                "DELETE FROM _hb_psql_persist WHERE id = \(key)",
-                logger: self.logger
-            )
+            _ = try await connection.execute(DeleteRowStatement(key: key), logger: self.logger)
         }
     }
 
     /// tidy up database by cleaning out expired keys
     func tidy() async throws {
         _ = try await self.client.withConnection { connection in
-            try await connection.query(
-                "DELETE FROM _hb_psql_persist WHERE expires < \(Date.now)",
-                logger: self.logger
-            )
+            _ = try await connection.execute(DeleteExpiredStatement(), logger: self.logger)
         }
+    }
+}
+
+extension HBPostgresPersistDriver {
+    struct CreateStatement: PostgresPreparedStatement {
+        typealias Row = Int
+
+        let key: String
+        let value: Data
+        let expires: Date
+
+        static let sql = "INSERT INTO _hb_psql_persist (id, data, expires) VALUES ($1, $2, $3)"
+
+        init(key: String, value: some Encodable, expires: Date) throws {
+            self.key = key
+            self.value = try JSONEncoder().encode(value)
+            self.expires = expires
+        }
+
+        func makeBindings() throws -> PostgresNIO.PostgresBindings {
+            var bindings = PostgresNIO.PostgresBindings()
+            bindings.append(.init(string: self.key))
+            bindings.append(.init(json: self.value))
+            bindings.append(.init(date: self.expires))
+            return bindings
+        }
+
+        func decodeRow(_ row: PostgresNIO.PostgresRow) throws -> Row { try row.decode(Row.self) }
+    }
+
+    struct SetStatement: PostgresPreparedStatement {
+        typealias Row = Int
+
+        let key: String
+        let value: Data
+        let expires: Date
+
+        static let sql = """
+        INSERT INTO _hb_psql_persist (id, data, expires) VALUES ($1, $2, $3)
+        ON CONFLICT (id)
+        DO UPDATE SET data = $2, expires = $3
+        """
+
+        init(key: String, value: some Encodable, expires: Date) throws {
+            self.key = key
+            self.value = try JSONEncoder().encode(value)
+            self.expires = expires
+        }
+
+        func makeBindings() throws -> PostgresNIO.PostgresBindings {
+            var bindings = PostgresNIO.PostgresBindings()
+            bindings.append(.init(string: self.key))
+            bindings.append(.init(json: self.value))
+            bindings.append(.init(date: self.expires))
+            return bindings
+        }
+
+        func decodeRow(_ row: PostgresNIO.PostgresRow) throws -> Row { try row.decode(Row.self) }
+    }
+
+    struct GetStatement: PostgresPreparedStatement {
+        typealias Row = (Data, Date)
+
+        let key: String
+        static var sql = "SELECT data, expires FROM _hb_psql_persist WHERE id = $1"
+
+        func makeBindings() throws -> PostgresNIO.PostgresBindings {
+            var bindings = PostgresNIO.PostgresBindings()
+            bindings.append(.init(string: self.key))
+            return bindings
+        }
+
+        func decodeRow(_ row: PostgresNIO.PostgresRow) throws -> Row { try row.decode(Row.self) }
+    }
+
+    struct DeleteRowStatement: PostgresPreparedStatement {
+        typealias Row = Int
+
+        let key: String
+        static var sql = "DELETE FROM _hb_psql_persist WHERE id = $1"
+
+        func makeBindings() throws -> PostgresNIO.PostgresBindings {
+            var bindings = PostgresNIO.PostgresBindings()
+            bindings.append(.init(string: self.key))
+            return bindings
+        }
+
+        func decodeRow(_ row: PostgresNIO.PostgresRow) throws -> Row { try row.decode(Row.self) }
+    }
+
+    struct DeleteExpiredStatement: PostgresPreparedStatement {
+        typealias Row = Int
+
+        static var sql = "DELETE FROM _hb_psql_persist WHERE expires < $1"
+
+        func makeBindings() throws -> PostgresNIO.PostgresBindings {
+            var bindings = PostgresNIO.PostgresBindings()
+            bindings.append(.init(date: .now))
+            return bindings
+        }
+
+        func decodeRow(_ row: PostgresNIO.PostgresRow) throws -> Row { try row.decode(Row.self) }
     }
 }
 
