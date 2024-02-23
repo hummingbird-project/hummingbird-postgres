@@ -97,7 +97,7 @@ final class MigrationTests: XCTestCase {
         let repository = HBPostgresMigrationRepository(client: client)
         return try await repository.withContext(logger: self.logger) { context in
             try await repository.getAll(context: context).compactMap { migration in
-                if groups.first { group in return group == migration.group } != nil {
+                if groups.first(where: { group in return group == migration.group }) != nil {
                     return migration.name
                 } else {
                     return nil
