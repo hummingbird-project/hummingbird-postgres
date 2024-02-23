@@ -128,7 +128,7 @@ extension HBPostgresPersistDriver {
         }
 
         func makeBindings() throws -> PostgresNIO.PostgresBindings {
-            var bindings = PostgresNIO.PostgresBindings()
+            var bindings = PostgresNIO.PostgresBindings(capacity: 3)
             bindings.append(.init(string: self.key))
             bindings.append(.init(json: self.value))
             bindings.append(.init(date: self.expires))
@@ -158,7 +158,7 @@ extension HBPostgresPersistDriver {
         }
 
         func makeBindings() throws -> PostgresNIO.PostgresBindings {
-            var bindings = PostgresNIO.PostgresBindings()
+            var bindings = PostgresNIO.PostgresBindings(capacity: 3)
             bindings.append(.init(string: self.key))
             bindings.append(.init(json: self.value))
             bindings.append(.init(date: self.expires))
@@ -175,7 +175,7 @@ extension HBPostgresPersistDriver {
         static var sql = "SELECT data, expires FROM _hb_psql_persist WHERE id = $1"
 
         func makeBindings() throws -> PostgresNIO.PostgresBindings {
-            var bindings = PostgresNIO.PostgresBindings()
+            var bindings = PostgresNIO.PostgresBindings(capacity: 1)
             bindings.append(.init(string: self.key))
             return bindings
         }
@@ -190,7 +190,7 @@ extension HBPostgresPersistDriver {
         static var sql = "DELETE FROM _hb_psql_persist WHERE id = $1"
 
         func makeBindings() throws -> PostgresNIO.PostgresBindings {
-            var bindings = PostgresNIO.PostgresBindings()
+            var bindings = PostgresNIO.PostgresBindings(capacity: 1)
             bindings.append(.init(string: self.key))
             return bindings
         }
@@ -204,7 +204,7 @@ extension HBPostgresPersistDriver {
         static var sql = "DELETE FROM _hb_psql_persist WHERE expires < $1"
 
         func makeBindings() throws -> PostgresNIO.PostgresBindings {
-            var bindings = PostgresNIO.PostgresBindings()
+            var bindings = PostgresNIO.PostgresBindings(capacity: 1)
             bindings.append(.init(date: .now))
             return bindings
         }
