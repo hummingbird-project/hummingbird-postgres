@@ -12,35 +12,18 @@
 //
 //===----------------------------------------------------------------------===//
 
-import HummingbirdPostgres
 import Logging
 @_spi(ConnectionPool) import PostgresNIO
 
-struct CreateJobQueue: HBPostgresMigration {
+struct CreatePersistTable: HBPostgresMigration {
     func apply(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
             """
-            CREATE TABLE IF NOT EXISTS _hb_jobs (
-                id uuid PRIMARY KEY,
-                job json,
-                status smallint
-            )     
-            """,
-            logger: logger
-        )
-        try await connection.query(
-            """
-            CREATE TABLE IF NOT EXISTS _hb_job_queue (
-                job_id uuid PRIMARY KEY,
-                createdAt timestamp with time zone
+            CREATE TABLE IF NOT EXISTS _hb_persist (
+                "id" text PRIMARY KEY,
+                "data" json NOT NULL,
+                "expires" timestamp with time zone NOT NULL
             )
-            """,
-            logger: logger
-        )
-        try await connection.query(
-            """
-            CREATE INDEX IF NOT EXISTS _hb_job_queueidx 
-            ON _hb_job_queue (createdAt ASC)
             """,
             logger: logger
         )
@@ -48,14 +31,10 @@ struct CreateJobQueue: HBPostgresMigration {
 
     func revert(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
-            "DROP TABLE _hb_jobs",
-            logger: logger
-        )
-        try await connection.query(
-            "DROP TABLE _hb_job_queue",
+            "DROP TABLE _hb_persist",
             logger: logger
         )
     }
 
-    var name: String { "_Create_JobQueue_Table_" }
+    var name: String { "_Create_Persist_Table_"}
 }

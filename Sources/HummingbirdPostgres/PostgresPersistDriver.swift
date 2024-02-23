@@ -56,10 +56,11 @@ public final class HBPostgresPersistDriver: HBPersistDriver {
     ///   - client: Postgres client
     ///   - tidyUpFrequequency: How frequently cleanup expired database entries should occur
     @_spi(ConnectionPool)
-    public init(client: PostgresClient, tidyUpFrequency: Duration = .seconds(600), logger: Logger) {
+    public init(client: PostgresClient, migrations: HBPostgresMigrations, tidyUpFrequency: Duration = .seconds(600), logger: Logger) async {
         self.client = client
         self.logger = logger
         self.tidyUpFrequency = tidyUpFrequency
+        await migrations.add(CreatePersistTable())
     }
 
     /// Create new key. This doesn't check for the existence of this key already so may fail if the key already exists
@@ -68,7 +69,7 @@ public final class HBPostgresPersistDriver: HBPersistDriver {
         try await self.client.withConnection { connection in
             do {
                 try await connection.query(
-                    "INSERT INTO _hb_psql_persist (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(expires))",
+                    "INSERT INTO _hb_persist (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(expires))",
                     logger: self.logger
                 )
             } catch let error as PSQLError {
@@ -87,7 +88,7 @@ public final class HBPostgresPersistDriver: HBPersistDriver {
         _ = try await self.client.withConnection { connection in
             try await connection.query(
                 """
-                INSERT INTO _hb_psql_persist (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(expires))
+                INSERT INTO _hb_persist (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(expires))
                 ON CONFLICT (id)
                 DO UPDATE SET data = \(WrapperObject(value)), expires = \(expires)
                 """,
@@ -100,7 +101,7 @@ public final class HBPostgresPersistDriver: HBPersistDriver {
     public func get<Object: Codable>(key: String, as object: Object.Type) async throws -> Object? {
         try await self.client.withConnection { connection in
             let stream = try await connection.query(
-                "SELECT data, expires FROM _hb_psql_persist WHERE id = \(key)",
+                "SELECT data, expires FROM _hb_persist WHERE id = \(key)",
                 logger: self.logger
             )
             guard let result = try await stream.decode((WrapperObject<Object>, Date).self)
@@ -117,7 +118,7 @@ public final class HBPostgresPersistDriver: HBPersistDriver {
     public func remove(key: String) async throws {
         _ = try await self.client.withConnection { connection in
             try await connection.query(
-                "DELETE FROM _hb_psql_persist WHERE id = \(key)",
+                "DELETE FROM _hb_persist WHERE id = \(key)",
                 logger: self.logger
             )
         }
@@ -127,7 +128,7 @@ public final class HBPostgresPersistDriver: HBPersistDriver {
     func tidy() async throws {
         _ = try await self.client.withConnection { connection in
             try await connection.query(
-                "DELETE FROM _hb_psql_persist WHERE expires < \(Date.now)",
+                "DELETE FROM _hb_persist WHERE expires < \(Date.now)",
                 logger: self.logger
             )
         }
@@ -141,7 +142,7 @@ extension HBPostgresPersistDriver {
         _ = try await self.client.withConnection { connection in
             try await connection.query(
                 """
-                CREATE TABLE IF NOT EXISTS _hb_psql_persist (
+                CREATE TABLE IF NOT EXISTS _hb_persist (
                     "id" text PRIMARY KEY,
                     "data" json NOT NULL,
                     "expires" timestamp with time zone NOT NULL
