@@ -6,7 +6,7 @@ import NIOConcurrencyHelpers
 @_spi(ConnectionPool) import PostgresNIO
 
 @_spi(ConnectionPool)
-public final class HBPostgresJobQueue: HBJobQueue {
+public final class HBPostgresQueue: HBJobQueueDriver {
     public typealias JobID = UUID
 
     /// what to do with failed/processing jobs from last time queue was handled
@@ -47,9 +47,9 @@ public final class HBPostgresJobQueue: HBJobQueue {
         public init(
             jobTable: String = "_hb_jobs",
             jobQueueTable: String = "_hb_job_queue",
-            pendingJobsInitialization: HBPostgresJobQueue.JobInitialization = .doNothing,
-            failedJobsInitialization: HBPostgresJobQueue.JobInitialization = .rerun,
-            processingJobsInitialization: HBPostgresJobQueue.JobInitialization = .rerun,
+            pendingJobsInitialization: HBPostgresQueue.JobInitialization = .doNothing,
+            failedJobsInitialization: HBPostgresQueue.JobInitialization = .rerun,
+            processingJobsInitialization: HBPostgresQueue.JobInitialization = .rerun,
             pollTime: Duration = .milliseconds(100)
         ) {
             self.jobTable = jobTable
@@ -61,12 +61,19 @@ public final class HBPostgresJobQueue: HBJobQueue {
         }
     }
 
-    let client: PostgresClient
-    let configuration: Configuration
-    let logger: Logger
+    /// Postgres client used by Job queue
+    public let client: PostgresClient
+    /// Job queue configuration
+    public let configuration: Configuration
+    /// Logger used by queue
+    public let logger: Logger
     let isStopped: NIOLockedValueBox<Bool>
 
     /// Initialize a HBPostgresJobQueue
+    /// - Parameters:
+    ///   - client: Postgres client
+    ///   - configuration: Queue configuration
+    ///   - logger: Logger used by queue
     public init(client: PostgresClient, configuration: Configuration = .init(), logger: Logger) {
         self.client = client
         self.configuration = configuration
@@ -82,7 +89,7 @@ public final class HBPostgresJobQueue: HBJobQueue {
                     """
                     CREATE TABLE IF NOT EXISTS \(unescaped: self.configuration.jobTable) (
                         id uuid PRIMARY KEY,
-                        job json,
+                        job bytea,
                         status smallint
                     )     
                     """,
@@ -116,9 +123,9 @@ public final class HBPostgresJobQueue: HBJobQueue {
 
     /// Push Job onto queue
     /// - Returns: Identifier of queued job
-    @discardableResult public func push(_ job: HBJob) async throws -> JobID {
+    @discardableResult public func push(data: Data) async throws -> JobID {
         try await self.client.withConnection { connection in
-            let queuedJob = HBQueuedJob<JobID>(id: .init(), job: job)
+            let queuedJob = HBQueuedJob<JobID>(id: .init(), jobData: data)
             try await add(queuedJob, connection: connection)
             try await addToQueue(jobId: queuedJob.id, connection: connection)
             return queuedJob.id
@@ -179,10 +186,10 @@ public final class HBPostgresJobQueue: HBJobQueue {
                     do {
                         try await self.setStatus(jobId: jobId, status: .processing, connection: connection)
                         // if failed to find a job in the job table try getting another index
-                        guard let job = try await stream2.decode(HBAnyCodableJob.self, context: .default).first(where: { _ in true }) else {
+                        guard let data = try await stream2.decode(Data.self, context: .default).first(where: { _ in true }) else {
                             continue
                         }
-                        return HBQueuedJob(id: jobId, job: job.job)
+                        return HBQueuedJob(id: jobId, jobData: data)
                     } catch {
                         try await self.setStatus(jobId: jobId, status: .failed, connection: connection)
                         throw JobQueueError.decodeJobFailed
@@ -199,7 +206,7 @@ public final class HBPostgresJobQueue: HBJobQueue {
         try await connection.query(
             """
             INSERT INTO \(unescaped: self.configuration.jobTable) (id, job, status)
-            VALUES (\(job.id), \(job.anyCodableJob), \(Status.pending))
+            VALUES (\(job.id), \(job.jobData), \(Status.pending))
             """,
             logger: self.logger
         )
@@ -262,9 +269,9 @@ public final class HBPostgresJobQueue: HBJobQueue {
 }
 
 /// extend HBPostgresJobQueue to conform to AsyncSequence
-extension HBPostgresJobQueue {
+extension HBPostgresQueue {
     public struct AsyncIterator: AsyncIteratorProtocol {
-        let queue: HBPostgresJobQueue
+        let queue: HBPostgresQueue
 
         public func next() async throws -> Element? {
             while true {
@@ -285,4 +292,14 @@ extension HBPostgresJobQueue {
     }
 }
 
-extension HBAnyCodableJob: PostgresCodable {}
+@_spi(ConnectionPool)
+extension HBJobQueueDriver where Self == HBPostgresQueue {
+    /// Return Postgres driver for Job Queue
+    /// - Parameters:
+    ///   - client: Postgres client
+    ///   - configuration: Queue configuration
+    ///   - logger: Logger used by queue
+    public static func postgres(client: PostgresClient, configuration: HBPostgresQueue.Configuration = .init(), logger: Logger) -> Self {
+        .init(client: client, configuration: configuration, logger: logger)
+    }
+}
