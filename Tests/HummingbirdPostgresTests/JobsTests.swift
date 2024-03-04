@@ -231,8 +231,8 @@ final class JobsTests: XCTestCase {
             try await jobQueue.push(id: jobIdentifer, parameters: 0)
             await self.wait(for: [expectation], timeout: 5)
 
-            let failedJobs = try await jobQueue.queue.getJobs(withStatus: .processing)
-            XCTAssertEqual(failedJobs.count, 1)
+            let processingJobs = try await jobQueue.queue.getJobs(withStatus: .processing)
+            XCTAssertEqual(processingJobs.count, 1)
             let pendingJobs = try await jobQueue.queue.getJobs(withStatus: .pending)
             XCTAssertEqual(pendingJobs.count, 0)
             return jobQueue

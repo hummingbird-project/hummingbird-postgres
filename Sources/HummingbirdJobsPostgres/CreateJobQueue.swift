@@ -23,7 +23,8 @@ struct CreateJobQueue: HBPostgresMigration {
             CREATE TABLE IF NOT EXISTS _hb_jobs (
                 id uuid PRIMARY KEY,
                 job json,
-                status smallint
+                status smallint,
+                lastModified TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
             )     
             """,
             logger: logger

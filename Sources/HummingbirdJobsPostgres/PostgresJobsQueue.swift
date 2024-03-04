@@ -216,7 +216,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
 
     func setStatus(jobId: JobID, status: Status, connection: PostgresConnection) async throws {
         try await connection.query(
-            "UPDATE _hb_jobs SET status = \(status) WHERE id = \(jobId)",
+            "UPDATE _hb_jobs SET status = \(status), lastModified = \(Date.now) WHERE id = \(jobId)",
             logger: self.logger
         )
     }
