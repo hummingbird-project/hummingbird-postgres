@@ -16,36 +16,40 @@ import Logging
 @_spi(ConnectionPool) import PostgresNIO
 
 /// Database migration support
-public final class HBPostgresMigrations {
+public actor HBPostgresMigrations {
+    enum State {
+        case waiting([CheckedContinuation<Void, Error>])
+        case completed
+        case failed(Error)
+    }
+
     var migrations: [HBPostgresMigration]
     var reverts: [String: HBPostgresMigration]
+    var state: State
 
     public init() {
         self.migrations = []
         self.reverts = [:]
+        self.state = .waiting([])
     }
 
     /// Add migration to list of reverts, that can be applied
-    @MainActor
     public func add(_ migration: HBPostgresMigration) {
         self.migrations.append(migration)
     }
 
     /// Add migration to list of reverts, that can be applied
-    @MainActor
-    public func add(revert migration: HBPostgresMigration) {
+    public func revert(_ migration: HBPostgresMigration) {
         self.reverts[migration.name] = migration
     }
 
     /// Apply database migrations
     @_spi(ConnectionPool)
-    @MainActor
     public func apply(client: PostgresClient, groups: [HBMigrationGroup] = [], logger: Logger, dryRun: Bool) async throws {
         try await self.migrate(client: client, migrations: self.migrations, groups: groups, logger: logger, dryRun: dryRun)
     }
 
     @_spi(ConnectionPool)
-    @MainActor
     public func revert(client: PostgresClient, groups: [HBMigrationGroup] = [], logger: Logger, dryRun: Bool) async throws {
         try await self.migrate(client: client, migrations: [], groups: groups, logger: logger, dryRun: dryRun)
     }
@@ -57,6 +61,12 @@ public final class HBPostgresMigrations {
         logger: Logger,
         dryRun: Bool
     ) async throws {
+        switch self.state {
+        case .completed, .failed:
+            self.state = .waiting([])
+        case .waiting:
+            break
+        }
         let repository = HBPostgresMigrationRepository(client: client)
         do {
             _ = try await repository.withContext(logger: logger) { context in
@@ -113,6 +123,52 @@ public final class HBPostgresMigrations {
                     throw HBPostgresMigrationError.requiresChanges
                 }
             }
+        } catch {
+            self.setFailed(error)
+            throw error
+        }
+        self.setCompleted()
+    }
+
+    public func waitUntilCompleted() async throws {
+        switch self.state {
+        case .waiting(var continuations):
+            return try await withCheckedThrowingContinuation { cont in
+                continuations.append(cont)
+                self.state = .waiting(continuations)
+            }
+        case .completed:
+            return
+        case .failed(let error):
+            throw error
+        }
+    }
+
+    func setCompleted() {
+        switch self.state {
+        case .waiting(let continuations):
+            for cont in continuations {
+                cont.resume()
+            }
+            self.state = .completed
+        case .completed:
+            break
+        case .failed:
+            preconditionFailure("Cannot set it has completed after having set it has failed")
+        }
+    }
+
+    func setFailed(_ error: Error) {
+        switch self.state {
+        case .waiting(let continuations):
+            for cont in continuations {
+                cont.resume(throwing: error)
+            }
+            self.state = .failed(error)
+        case .completed:
+            preconditionFailure("Cannot set it has failed after having set it has completed")
+        case .failed(let error):
+            self.state = .failed(error)
         }
     }
 }
