@@ -94,10 +94,10 @@ public final class HBPostgresQueue: HBJobQueueDriver {
     /// Run on initialization of the job queue
     public func onInit() async throws {
         do {
-            self.logger.debug("Waiting for JobQueue migrations")
+            self.logger.info("Waiting for JobQueue migrations")
             try await self.migrations.waitUntilCompleted()
             _ = try await self.client.withConnection { connection in
-                self.logger.debug("Update Jobs at initialization")
+                self.logger.info("Update Jobs at initialization")
                 try await self.updateJobsOnInit(withStatus: .pending, onInit: self.configuration.pendingJobsInitialization, connection: connection)
                 try await self.updateJobsOnInit(withStatus: .processing, onInit: self.configuration.processingJobsInitialization, connection: connection)
                 try await self.updateJobsOnInit(withStatus: .failed, onInit: self.configuration.failedJobsInitialization, connection: connection)
