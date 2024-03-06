@@ -52,7 +52,7 @@ final class JobsTests: XCTestCase {
             backgroundLogger: logger
         )
         let postgresMigrations = HBPostgresMigrations()
-        return HBJobQueue(
+        return await HBJobQueue(
             HBPostgresQueue(
                 client: postgresClient,
                 migrations: postgresMigrations,
@@ -70,6 +70,7 @@ final class JobsTests: XCTestCase {
     /// shutdown correctly
     @discardableResult public func testJobQueue<T>(
         jobQueue: HBJobQueue<HBPostgresQueue>,
+        revertMigrations: Bool = false,
         test: (HBJobQueue<HBPostgresQueue>) async throws -> T
     ) async throws -> T {
         do {
@@ -85,8 +86,14 @@ final class JobsTests: XCTestCase {
                     try await serviceGroup.run()
                 }
                 do {
-                    try await postgresMigrations.apply(client: postgresClient, groups: [.jobQueue], logger: logger, dryRun: false)
-                    let value = try await test(postgresJobQueue)
+                    let migrations = jobQueue.queue.migrations
+                    let client = jobQueue.queue.client
+                    let logger = jobQueue.queue.logger
+                    if revertMigrations {
+                        try await migrations.revert(client: client, groups: [.jobQueue], logger: logger, dryRun: false)
+                    }
+                    try await migrations.apply(client: client, groups: [.jobQueue], logger: logger, dryRun: false)
+                    let value = try await test(jobQueue)
                     await serviceGroup.triggerGracefulShutdown()
                     return value
                 } catch let error as PSQLError {
@@ -114,7 +121,7 @@ final class JobsTests: XCTestCase {
         test: (HBJobQueue<HBPostgresQueue>) async throws -> T
     ) async throws -> T {
         let jobQueue = try await self.createJobQueue(numWorkers: numWorkers, configuration: configuration)
-        return try await self.testJobQueue(jobQueue: jobQueue, test: test)
+        return try await self.testJobQueue(jobQueue: jobQueue, revertMigrations: true, test: test)
     }
 
     func testBasic() async throws {
@@ -318,20 +325,21 @@ final class JobsTests: XCTestCase {
             backgroundLogger: logger
         )
         let postgresMigrations = HBPostgresMigrations()
-        let jobQueue = HBJobQueue(
+        let jobQueue = await HBJobQueue(
             .postgres(
-                client: postgresClient, 
-                migrations: postgresMigrations, 
+                client: postgresClient,
+                migrations: postgresMigrations,
                 configuration: .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
                 logger: logger
             ),
             numWorkers: 2,
             logger: logger
         )
-        let jobQueue2 = HBJobQueue(
+        let postgresMigrations2 = HBPostgresMigrations()
+        let jobQueue2 = await HBJobQueue(
             HBPostgresQueue(
                 client: postgresClient,
-                migrations: postgresMigrations,
+                migrations: postgresMigrations2,
                 configuration: .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
                 logger: logger
             ),
@@ -348,22 +356,22 @@ final class JobsTests: XCTestCase {
                     gracefulShutdownSignals: [.sigterm, .sigint],
                     logger: logger
                 )
-                group.addTask {
-                    try await serviceGroup.run()
+            )
+            group.addTask {
+                try await serviceGroup.run()
+            }
+            try await postgresMigrations.apply(client: postgresClient, groups: [.jobQueue], logger: logger, dryRun: false)
+            try await postgresMigrations2.apply(client: postgresClient, groups: [.jobQueue], logger: logger, dryRun: false)
+            do {
+                for i in 0..<200 {
+                    try await jobQueue.push(id: jobIdentifer, parameters: i)
                 }
-                try await postgresMigrations.apply(client: postgresClient, groups: [.jobQueue], logger: logger, dryRun: false)
-                try await postgresMigrations2.apply(client: postgresClient, groups: [.jobQueue], logger: logger, dryRun: false)
-                do {
-                    for i in 0..<200 {
-                        try await postgresJobQueue.push(id: jobIdentifer, parameters: i)
-                    }
-                    await self.wait(for: [expectation], timeout: 5)
-                    await serviceGroup.triggerGracefulShutdown()
-                } catch {
-                    XCTFail("\(String(reflecting: error))")
-                    await serviceGroup.triggerGracefulShutdown()
-                    throw error
-                }
+                await self.wait(for: [expectation], timeout: 5)
+                await serviceGroup.triggerGracefulShutdown()
+            } catch {
+                XCTFail("\(String(reflecting: error))")
+                await serviceGroup.triggerGracefulShutdown()
+                throw error
             }
         }
     }

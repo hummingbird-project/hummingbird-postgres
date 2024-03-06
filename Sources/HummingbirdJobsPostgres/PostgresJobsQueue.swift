@@ -87,6 +87,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
         self.logger = logger
         self.isStopped = .init(false)
         self.migrations = migrations
+        await migrations.add(CreateJobs())
         await migrations.add(CreateJobQueue())
     }
 

@@ -65,7 +65,7 @@ public actor HBPostgresMigrations {
     ///   - dryRun: Should migrations actually be applied, or should we just report what would be applied and reverted
     @_spi(ConnectionPool)
     public func apply(client: PostgresClient, groups: [HBMigrationGroup] = [], logger: Logger, dryRun: Bool) async throws {
-        try await self.migrate(client: client, migrations: self.migrations, groups: groups, logger: logger, dryRun: dryRun)
+        try await self.migrate(client: client, migrations: self.migrations, groups: groups, logger: logger, completeMigrations: true, dryRun: dryRun)
     }
 
     /// Revery database migrations
@@ -75,7 +75,7 @@ public actor HBPostgresMigrations {
     ///   - dryRun: Should migrations actually be reverted, or should we just report what would be reverted
     @_spi(ConnectionPool)
     public func revert(client: PostgresClient, groups: [HBMigrationGroup] = [], logger: Logger, dryRun: Bool) async throws {
-        try await self.migrate(client: client, migrations: [], groups: groups, logger: logger, dryRun: dryRun)
+        try await self.migrate(client: client, migrations: [], groups: groups, logger: logger, completeMigrations: false, dryRun: dryRun)
     }
 
     private func migrate(
@@ -83,6 +83,7 @@ public actor HBPostgresMigrations {
         migrations: [HBPostgresMigration],
         groups: [HBMigrationGroup],
         logger: Logger,
+        completeMigrations: Bool,
         dryRun: Bool
     ) async throws {
         switch self.state {
@@ -151,7 +152,9 @@ public actor HBPostgresMigrations {
             self.setFailed(error)
             throw error
         }
-        self.setCompleted()
+        if completeMigrations {
+            self.setCompleted()
+        }
     }
 
     /// Report if the migration process has completed
