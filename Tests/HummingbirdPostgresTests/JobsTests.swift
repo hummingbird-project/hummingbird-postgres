@@ -41,9 +41,9 @@ final class JobsTests: XCTestCase {
 
     static let env = HBEnvironment()
 
-    func createJobQueue(numWorkers: Int, configuration: HBPostgresQueue.Configuration) async throws -> HBJobQueue<HBPostgresQueue> {
+    func createJobQueue(numWorkers: Int, configuration: HBPostgresQueue.Configuration, function: String = #function) async throws -> HBJobQueue<HBPostgresQueue> {
         let logger = {
-            var logger = Logger(label: "JobsTests")
+            var logger = Logger(label: function)
             logger.logLevel = .debug
             return logger
         }()
@@ -118,10 +118,12 @@ final class JobsTests: XCTestCase {
     @discardableResult public func testJobQueue<T>(
         numWorkers: Int,
         configuration: HBPostgresQueue.Configuration = .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
+        revertMigrations: Bool = true,
+        function: String = #function,
         test: (HBJobQueue<HBPostgresQueue>) async throws -> T
     ) async throws -> T {
-        let jobQueue = try await self.createJobQueue(numWorkers: numWorkers, configuration: configuration)
-        return try await self.testJobQueue(jobQueue: jobQueue, revertMigrations: true, test: test)
+        let jobQueue = try await self.createJobQueue(numWorkers: numWorkers, configuration: configuration, function: function)
+        return try await self.testJobQueue(jobQueue: jobQueue, revertMigrations: revertMigrations, test: test)
     }
 
     func testBasic() async throws {
@@ -228,8 +230,7 @@ final class JobsTests: XCTestCase {
     func testShutdownJob() async throws {
         let jobIdentifer = HBJobIdentifier<Int>(#function)
         let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 1)
-        var logger = Logger(label: "HummingbirdJobsTests")
-        logger.logLevel = .trace
+
         try await self.testJobQueue(numWorkers: 4) { jobQueue in
             jobQueue.registerJob(jobIdentifer) { _, _ in
                 expectation.fulfill()
@@ -311,7 +312,7 @@ final class JobsTests: XCTestCase {
         let jobIdentifer = HBJobIdentifier<Int>(#function)
         let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 200)
         let logger = {
-            var logger = Logger(label: "HummingbirdJobsTests")
+            var logger = Logger(label: "testMultipleJobQueueHandlers")
             logger.logLevel = .debug
             return logger
         }()
