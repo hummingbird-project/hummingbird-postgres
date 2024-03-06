@@ -246,6 +246,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
         case .rerun:
             guard status != .pending else { return }
             let jobs = try await getJobs(withStatus: status)
+            self.logger.info("Moving \(jobs.count) jobs with status: \(status) to job queue")
             for jobId in jobs {
                 try await self.addToQueue(jobId: jobId, connection: connection)
             }

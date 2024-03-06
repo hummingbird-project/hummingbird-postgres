@@ -287,7 +287,7 @@ final class JobsTests: XCTestCase {
         }
         let jobQueue = try await createJobQueue(numWorkers: 1, configuration: .init(pendingJobsInitialization: .remove, failedJobsInitialization: .rerun))
         jobQueue.registerJob(job)
-        try await self.testJobQueue(jobQueue: jobQueue) { jobQueue in
+        try await self.testJobQueue(jobQueue: jobQueue, revertMigrations: true) { jobQueue in
 
             try await jobQueue.push(id: jobIdentifer, parameters: 0)
 
