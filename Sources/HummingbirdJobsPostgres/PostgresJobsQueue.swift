@@ -149,10 +149,10 @@ public final class HBPostgresQueue: HBJobQueueDriver {
                     let stream = try await connection.query(
                         """
                         DELETE
-                        FROM _hb_job_queue pse
+                        FROM _hb_pg_job_queue pse
                         WHERE pse.job_id =
                             (SELECT pse_inner.job_id
-                            FROM _hb_job_queue pse_inner
+                            FROM _hb_pg_job_queue pse_inner
                             ORDER BY pse_inner.createdAt ASC
                                 FOR UPDATE SKIP LOCKED
                             LIMIT 1)
@@ -166,7 +166,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
                     }
                     // select job from job table
                     let stream2 = try await connection.query(
-                        "SELECT job FROM _hb_jobs WHERE id = \(jobId)",
+                        "SELECT job FROM _hb_pg_jobs WHERE id = \(jobId)",
                         logger: self.logger
                     )
 
@@ -192,7 +192,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
     func add(_ job: HBQueuedJob<JobID>, connection: PostgresConnection) async throws {
         try await connection.query(
             """
-            INSERT INTO _hb_jobs (id, job, status)
+            INSERT INTO _hb_pg_jobs (id, job, status)
             VALUES (\(job.id), \(job.jobBuffer), \(Status.pending))
             """,
             logger: self.logger
@@ -201,7 +201,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
 
     func delete(jobId: JobID, connection: PostgresConnection) async throws {
         try await connection.query(
-            "DELETE FROM _hb_jobs WHERE id = \(jobId)",
+            "DELETE FROM _hb_pg_jobs WHERE id = \(jobId)",
             logger: self.logger
         )
     }
@@ -209,7 +209,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
     func addToQueue(jobId: JobID, connection: PostgresConnection) async throws {
         try await connection.query(
             """
-            INSERT INTO _hb_job_queue (job_id, createdAt) VALUES (\(jobId), \(Date.now))
+            INSERT INTO _hb_pg_job_queue (job_id, createdAt) VALUES (\(jobId), \(Date.now))
             """,
             logger: self.logger
         )
@@ -217,7 +217,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
 
     func setStatus(jobId: JobID, status: Status, connection: PostgresConnection) async throws {
         try await connection.query(
-            "UPDATE _hb_jobs SET status = \(status), lastModified = \(Date.now) WHERE id = \(jobId)",
+            "UPDATE _hb_pg_jobs SET status = \(status), lastModified = \(Date.now) WHERE id = \(jobId)",
             logger: self.logger
         )
     }
@@ -225,7 +225,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
     func getJobs(withStatus status: Status) async throws -> [JobID] {
         return try await self.client.withConnection { connection in
             let stream = try await connection.query(
-                "SELECT id FROM _hb_jobs WHERE status = \(status)",
+                "SELECT id FROM _hb_pg_jobs WHERE status = \(status)",
                 logger: self.logger
             )
             var jobs: [JobID] = []
@@ -240,7 +240,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
         switch onInit {
         case .remove:
             try await connection.query(
-                "DELETE FROM _hb_jobs WHERE status = \(status)",
+                "DELETE FROM _hb_pg_jobs WHERE status = \(status)",
                 logger: self.logger
             )
         case .rerun:

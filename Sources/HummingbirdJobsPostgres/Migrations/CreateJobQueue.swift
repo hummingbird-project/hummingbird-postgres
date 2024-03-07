@@ -20,7 +20,7 @@ struct CreateJobQueue: HBPostgresMigration {
     func apply(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
             """
-            CREATE TABLE IF NOT EXISTS _hb_job_queue (
+            CREATE TABLE IF NOT EXISTS _hb_pg_job_queue (
                 job_id uuid PRIMARY KEY,
                 createdAt timestamp with time zone
             )
@@ -30,7 +30,7 @@ struct CreateJobQueue: HBPostgresMigration {
         try await connection.query(
             """
             CREATE INDEX IF NOT EXISTS _hb_job_queueidx 
-            ON _hb_job_queue (createdAt ASC)
+            ON _hb_pg_job_queue (createdAt ASC)
             """,
             logger: logger
         )
@@ -38,7 +38,7 @@ struct CreateJobQueue: HBPostgresMigration {
 
     func revert(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
-            "DROP TABLE _hb_job_queue",
+            "DROP TABLE _hb_pg_job_queue",
             logger: logger
         )
     }

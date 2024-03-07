@@ -20,7 +20,7 @@ struct CreateJobs: HBPostgresMigration {
     func apply(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
             """
-            CREATE TABLE IF NOT EXISTS _hb_jobs (
+            CREATE TABLE IF NOT EXISTS _hb_pg_jobs (
                 id uuid PRIMARY KEY,
                 job bytea,
                 status smallint,
@@ -33,7 +33,7 @@ struct CreateJobs: HBPostgresMigration {
 
     func revert(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
-            "DROP TABLE _hb_jobs",
+            "DROP TABLE _hb_pg_jobs",
             logger: logger
         )
     }

@@ -19,7 +19,7 @@ struct CreatePersistTable: HBPostgresMigration {
     func apply(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
             """
-            CREATE TABLE IF NOT EXISTS _hb_persist (
+            CREATE TABLE IF NOT EXISTS _hb_pg_persist (
                 "id" text PRIMARY KEY,
                 "data" json NOT NULL,
                 "expires" timestamp with time zone NOT NULL
@@ -31,7 +31,7 @@ struct CreatePersistTable: HBPostgresMigration {
 
     func revert(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
-            "DROP TABLE _hb_persist",
+            "DROP TABLE _hb_pg_persist",
             logger: logger
         )
     }
@@ -42,5 +42,5 @@ struct CreatePersistTable: HBPostgresMigration {
 
 extension HBMigrationGroup {
     /// Persist driver migration group
-    public static var persist: Self { .init("_hb_persist") }
+    public static var persist: Self { .init("_hb_pg_persist") }
 }
