@@ -14,7 +14,7 @@
 
 import Hummingbird
 @_spi(ConnectionPool) import HummingbirdPostgres
-import HummingbirdXCT
+import HummingbirdTesting
 import Logging
 @_spi(ConnectionPool) import PostgresNIO
 import ServiceLifecycle
@@ -83,8 +83,8 @@ final class PersistTests: XCTestCase {
         let app = try await self.createApplication()
         try await app.test(.router) { client in
             let tag = UUID().uuidString
-            try await client.XCTExecute(uri: "/persist/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "Persist")) { _ in }
-            try await client.XCTExecute(uri: "/persist/\(tag)", method: .get) { response in
+            try await client.execute(uri: "/persist/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "Persist")) { _ in }
+            try await client.execute(uri: "/persist/\(tag)", method: .get) { response in
                 let body = try XCTUnwrap(response.body)
                 XCTAssertEqual(String(buffer: body), "Persist")
             }
@@ -102,8 +102,8 @@ final class PersistTests: XCTestCase {
         }
         try await app.test(.router) { client in
             let tag = UUID().uuidString
-            try await client.XCTExecute(uri: "/create/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "Persist")) { _ in }
-            try await client.XCTExecute(uri: "/persist/\(tag)", method: .get) { response in
+            try await client.execute(uri: "/create/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "Persist")) { _ in }
+            try await client.execute(uri: "/persist/\(tag)", method: .get) { response in
                 let body = try XCTUnwrap(response.body)
                 XCTAssertEqual(String(buffer: body), "Persist")
             }
@@ -125,10 +125,10 @@ final class PersistTests: XCTestCase {
         }
         try await app.test(.router) { client in
             let tag = UUID().uuidString
-            try await client.XCTExecute(uri: "/create/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "Persist")) { response in
+            try await client.execute(uri: "/create/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "Persist")) { response in
                 XCTAssertEqual(response.status, .ok)
             }
-            try await client.XCTExecute(uri: "/create/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "Persist")) { response in
+            try await client.execute(uri: "/create/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "Persist")) { response in
                 XCTAssertEqual(response.status, .conflict)
             }
         }
@@ -139,11 +139,11 @@ final class PersistTests: XCTestCase {
         try await app.test(.router) { client in
 
             let tag = UUID().uuidString
-            try await client.XCTExecute(uri: "/persist/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "test1")) { _ in }
-            try await client.XCTExecute(uri: "/persist/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "test2")) { response in
+            try await client.execute(uri: "/persist/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "test1")) { _ in }
+            try await client.execute(uri: "/persist/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "test2")) { response in
                 XCTAssertEqual(response.status, .ok)
             }
-            try await client.XCTExecute(uri: "/persist/\(tag)", method: .get) { response in
+            try await client.execute(uri: "/persist/\(tag)", method: .get) { response in
                 let body = try XCTUnwrap(response.body)
                 XCTAssertEqual(String(buffer: body), "test2")
             }
@@ -157,13 +157,13 @@ final class PersistTests: XCTestCase {
             let tag1 = UUID().uuidString
             let tag2 = UUID().uuidString
 
-            try await client.XCTExecute(uri: "/persist/\(tag1)/0", method: .put, body: ByteBufferAllocator().buffer(string: "ThisIsTest1")) { _ in }
-            try await client.XCTExecute(uri: "/persist/\(tag2)/10", method: .put, body: ByteBufferAllocator().buffer(string: "ThisIsTest2")) { _ in }
+            try await client.execute(uri: "/persist/\(tag1)/0", method: .put, body: ByteBufferAllocator().buffer(string: "ThisIsTest1")) { _ in }
+            try await client.execute(uri: "/persist/\(tag2)/10", method: .put, body: ByteBufferAllocator().buffer(string: "ThisIsTest2")) { _ in }
             try await Task.sleep(nanoseconds: 1_000_000_000)
-            try await client.XCTExecute(uri: "/persist/\(tag1)", method: .get) { response in
+            try await client.execute(uri: "/persist/\(tag1)", method: .get) { response in
                 XCTAssertEqual(response.status, .noContent)
             }
-            try await client.XCTExecute(uri: "/persist/\(tag2)", method: .get) { response in
+            try await client.execute(uri: "/persist/\(tag2)", method: .get) { response in
                 let body = try XCTUnwrap(response.body)
                 XCTAssertEqual(String(buffer: body), "ThisIsTest2")
             }
@@ -190,8 +190,8 @@ final class PersistTests: XCTestCase {
         try await app.test(.router) { client in
 
             let tag = UUID().uuidString
-            try await client.XCTExecute(uri: "/codable/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "Persist")) { _ in }
-            try await client.XCTExecute(uri: "/codable/\(tag)", method: .get) { response in
+            try await client.execute(uri: "/codable/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "Persist")) { _ in }
+            try await client.execute(uri: "/codable/\(tag)", method: .get) { response in
                 let body = try XCTUnwrap(response.body)
                 XCTAssertEqual(String(buffer: body), "Persist")
             }
@@ -202,9 +202,9 @@ final class PersistTests: XCTestCase {
         let app = try await self.createApplication()
         try await app.test(.router) { client in
             let tag = UUID().uuidString
-            try await client.XCTExecute(uri: "/persist/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "ThisIsTest1")) { _ in }
-            try await client.XCTExecute(uri: "/persist/\(tag)", method: .delete) { _ in }
-            try await client.XCTExecute(uri: "/persist/\(tag)", method: .get) { response in
+            try await client.execute(uri: "/persist/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "ThisIsTest1")) { _ in }
+            try await client.execute(uri: "/persist/\(tag)", method: .delete) { _ in }
+            try await client.execute(uri: "/persist/\(tag)", method: .get) { response in
                 XCTAssertEqual(response.status, .noContent)
             }
         }
@@ -215,15 +215,15 @@ final class PersistTests: XCTestCase {
         try await app.test(.router) { client in
 
             let tag = UUID().uuidString
-            try await client.XCTExecute(uri: "/persist/\(tag)/0", method: .put, body: ByteBufferAllocator().buffer(string: "ThisIsTest1")) { _ in }
+            try await client.execute(uri: "/persist/\(tag)/0", method: .put, body: ByteBufferAllocator().buffer(string: "ThisIsTest1")) { _ in }
             try await Task.sleep(nanoseconds: 1_000_000_000)
-            try await client.XCTExecute(uri: "/persist/\(tag)", method: .get) { response in
+            try await client.execute(uri: "/persist/\(tag)", method: .get) { response in
                 XCTAssertEqual(response.status, .noContent)
             }
-            try await client.XCTExecute(uri: "/persist/\(tag)/10", method: .put, body: ByteBufferAllocator().buffer(string: "ThisIsTest1")) { response in
+            try await client.execute(uri: "/persist/\(tag)/10", method: .put, body: ByteBufferAllocator().buffer(string: "ThisIsTest1")) { response in
                 XCTAssertEqual(response.status, .ok)
             }
-            try await client.XCTExecute(uri: "/persist/\(tag)", method: .get) { response in
+            try await client.execute(uri: "/persist/\(tag)", method: .get) { response in
                 XCTAssertEqual(response.status, .ok)
                 let body = try XCTUnwrap(response.body)
                 XCTAssertEqual(String(buffer: body), "ThisIsTest1")

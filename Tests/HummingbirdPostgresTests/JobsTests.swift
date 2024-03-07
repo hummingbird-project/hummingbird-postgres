@@ -17,7 +17,7 @@ import Hummingbird
 import HummingbirdJobs
 @testable @_spi(ConnectionPool) import HummingbirdPostgres
 @testable @_spi(ConnectionPool) import HummingbirdJobsPostgres
-import HummingbirdXCT
+import HummingbirdTesting
 import NIOConcurrencyHelpers
 @_spi(ConnectionPool) import PostgresNIO
 import ServiceLifecycle
