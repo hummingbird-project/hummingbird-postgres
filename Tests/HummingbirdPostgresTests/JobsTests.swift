@@ -288,13 +288,12 @@ final class JobsTests: XCTestCase {
         let jobQueue = try await createJobQueue(numWorkers: 1, configuration: .init(pendingJobsInitialization: .remove, failedJobsInitialization: .rerun))
         jobQueue.registerJob(job)
         try await self.testJobQueue(jobQueue: jobQueue, revertMigrations: true) { jobQueue in
+            // stall to give onInit a chance to run, so it can remove any pendng jobs
+            try await Task.sleep(for: .milliseconds(100))
 
             try await jobQueue.push(id: jobIdentifer, parameters: 0)
 
             await self.wait(for: [failedExpectation], timeout: 10)
-
-            // stall to give job chance to start running
-            try await Task.sleep(for: .milliseconds(50))
 
             XCTAssertFalse(firstTime.load(ordering: .relaxed))
             XCTAssertFalse(finished.load(ordering: .relaxed))
