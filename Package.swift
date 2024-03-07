@@ -34,7 +34,7 @@ let package = Package(
             dependencies: [
                 "HummingbirdPostgres",
                 "HummingbirdJobsPostgres",
-                .product(name: "HummingbirdXCT", package: "hummingbird"),
+                .product(name: "HummingbirdTesting", package: "hummingbird"),
             ]
         ),
     ]
