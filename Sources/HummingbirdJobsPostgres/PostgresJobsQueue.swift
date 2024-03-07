@@ -1,3 +1,17 @@
+//===----------------------------------------------------------------------===//
+//
+// This source file is part of the Hummingbird server framework project
+//
+// Copyright (c) 2024 the Hummingbird authors
+// Licensed under Apache License v2.0
+//
+// See LICENSE.txt for license information
+// See hummingbird/CONTRIBUTORS.txt for the list of Hummingbird authors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+//===----------------------------------------------------------------------===//
+
 import Foundation
 import HummingbirdJobs
 @_spi(ConnectionPool) import HummingbirdPostgres
@@ -38,23 +52,17 @@ public final class HBPostgresQueue: HBJobQueueDriver {
 
     /// Queue configuration
     public struct Configuration: Sendable {
-        let jobTable: String
-        let jobQueueTable: String
         let pendingJobsInitialization: JobInitialization
         let failedJobsInitialization: JobInitialization
         let processingJobsInitialization: JobInitialization
         let pollTime: Duration
 
         public init(
-            jobTable: String = "_hb_jobs",
-            jobQueueTable: String = "_hb_job_queue",
-            pendingJobsInitialization: HBPostgresQueue.JobInitialization = .doNothing,
-            failedJobsInitialization: HBPostgresQueue.JobInitialization = .rerun,
-            processingJobsInitialization: HBPostgresQueue.JobInitialization = .rerun,
+            pendingJobsInitialization: JobInitialization = .doNothing,
+            failedJobsInitialization: JobInitialization = .rerun,
+            processingJobsInitialization: JobInitialization = .rerun,
             pollTime: Duration = .milliseconds(100)
         ) {
-            self.jobTable = jobTable
-            self.jobQueueTable = jobQueueTable
             self.pendingJobsInitialization = pendingJobsInitialization
             self.failedJobsInitialization = failedJobsInitialization
             self.processingJobsInitialization = processingJobsInitialization
@@ -68,50 +76,28 @@ public final class HBPostgresQueue: HBJobQueueDriver {
     public let configuration: Configuration
     /// Logger used by queue
     public let logger: Logger
+
+    let migrations: HBPostgresMigrations
     let isStopped: NIOLockedValueBox<Bool>
 
     /// Initialize a HBPostgresJobQueue
-    /// - Parameters:
-    ///   - client: Postgres client
-    ///   - configuration: Queue configuration
-    ///   - logger: Logger used by queue
-    public init(client: PostgresClient, configuration: Configuration = .init(), logger: Logger) {
+    public init(client: PostgresClient, migrations: HBPostgresMigrations, configuration: Configuration = .init(), logger: Logger) async {
         self.client = client
         self.configuration = configuration
         self.logger = logger
         self.isStopped = .init(false)
+        self.migrations = migrations
+        await migrations.add(CreateJobs())
+        await migrations.add(CreateJobQueue())
     }
 
     /// Run on initialization of the job queue
     public func onInit() async throws {
         do {
+            self.logger.info("Waiting for JobQueue migrations")
+            try await self.migrations.waitUntilCompleted()
             _ = try await self.client.withConnection { connection in
-                try await connection.query(
-                    """
-                    CREATE TABLE IF NOT EXISTS \(unescaped: self.configuration.jobTable) (
-                        id uuid PRIMARY KEY,
-                        job bytea,
-                        status smallint
-                    )     
-                    """,
-                    logger: self.logger
-                )
-                try await connection.query(
-                    """
-                    CREATE TABLE IF NOT EXISTS \(unescaped: self.configuration.jobQueueTable) (
-                        job_id uuid PRIMARY KEY,
-                        createdAt timestamp with time zone
-                    )
-                    """,
-                    logger: self.logger
-                )
-                try await connection.query(
-                    """
-                    CREATE INDEX IF NOT EXISTS \(unescaped: self.configuration.jobQueueTable)idx 
-                    ON \(unescaped: self.configuration.jobQueueTable) (createdAt ASC)
-                    """,
-                    logger: self.logger
-                )
+                self.logger.info("Update Jobs at initialization")
                 try await self.updateJobsOnInit(withStatus: .pending, onInit: self.configuration.pendingJobsInitialization, connection: connection)
                 try await self.updateJobsOnInit(withStatus: .processing, onInit: self.configuration.processingJobsInitialization, connection: connection)
                 try await self.updateJobsOnInit(withStatus: .failed, onInit: self.configuration.failedJobsInitialization, connection: connection)
@@ -163,10 +149,10 @@ public final class HBPostgresQueue: HBJobQueueDriver {
                     let stream = try await connection.query(
                         """
                         DELETE
-                        FROM \(unescaped: self.configuration.jobQueueTable) pse
+                        FROM _hb_pg_job_queue pse
                         WHERE pse.job_id =
                             (SELECT pse_inner.job_id
-                            FROM \(unescaped: self.configuration.jobQueueTable) pse_inner
+                            FROM _hb_pg_job_queue pse_inner
                             ORDER BY pse_inner.createdAt ASC
                                 FOR UPDATE SKIP LOCKED
                             LIMIT 1)
@@ -180,7 +166,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
                     }
                     // select job from job table
                     let stream2 = try await connection.query(
-                        "SELECT job FROM \(unescaped: self.configuration.jobTable) WHERE id = \(jobId)",
+                        "SELECT job FROM _hb_pg_jobs WHERE id = \(jobId)",
                         logger: self.logger
                     )
 
@@ -206,7 +192,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
     func add(_ job: HBQueuedJob<JobID>, connection: PostgresConnection) async throws {
         try await connection.query(
             """
-            INSERT INTO \(unescaped: self.configuration.jobTable) (id, job, status)
+            INSERT INTO _hb_pg_jobs (id, job, status)
             VALUES (\(job.id), \(job.jobBuffer), \(Status.pending))
             """,
             logger: self.logger
@@ -215,7 +201,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
 
     func delete(jobId: JobID, connection: PostgresConnection) async throws {
         try await connection.query(
-            "DELETE FROM \(unescaped: self.configuration.jobTable) WHERE id = \(jobId)",
+            "DELETE FROM _hb_pg_jobs WHERE id = \(jobId)",
             logger: self.logger
         )
     }
@@ -223,7 +209,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
     func addToQueue(jobId: JobID, connection: PostgresConnection) async throws {
         try await connection.query(
             """
-            INSERT INTO \(unescaped: self.configuration.jobQueueTable) (job_id, createdAt) VALUES (\(jobId), \(Date.now))
+            INSERT INTO _hb_pg_job_queue (job_id, createdAt) VALUES (\(jobId), \(Date.now))
             """,
             logger: self.logger
         )
@@ -231,7 +217,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
 
     func setStatus(jobId: JobID, status: Status, connection: PostgresConnection) async throws {
         try await connection.query(
-            "UPDATE \(unescaped: self.configuration.jobTable) SET status = \(status) WHERE id = \(jobId)",
+            "UPDATE _hb_pg_jobs SET status = \(status), lastModified = \(Date.now) WHERE id = \(jobId)",
             logger: self.logger
         )
     }
@@ -239,7 +225,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
     func getJobs(withStatus status: Status) async throws -> [JobID] {
         return try await self.client.withConnection { connection in
             let stream = try await connection.query(
-                "SELECT id FROM \(unescaped: self.configuration.jobTable) WHERE status = \(status)",
+                "SELECT id FROM _hb_pg_jobs WHERE status = \(status)",
                 logger: self.logger
             )
             var jobs: [JobID] = []
@@ -254,12 +240,13 @@ public final class HBPostgresQueue: HBJobQueueDriver {
         switch onInit {
         case .remove:
             try await connection.query(
-                "DELETE FROM \(unescaped: self.configuration.jobTable) WHERE status = \(status)",
+                "DELETE FROM _hb_pg_jobs WHERE status = \(status)",
                 logger: self.logger
             )
         case .rerun:
             guard status != .pending else { return }
             let jobs = try await getJobs(withStatus: status)
+            self.logger.info("Moving \(jobs.count) jobs with status: \(status) to job queue")
             for jobId in jobs {
                 try await self.addToQueue(jobId: jobId, connection: connection)
             }
@@ -300,7 +287,7 @@ extension HBJobQueueDriver where Self == HBPostgresQueue {
     ///   - client: Postgres client
     ///   - configuration: Queue configuration
     ///   - logger: Logger used by queue
-    public static func postgres(client: PostgresClient, configuration: HBPostgresQueue.Configuration = .init(), logger: Logger) -> Self {
-        .init(client: client, configuration: configuration, logger: logger)
+    public static func postgres(client: PostgresClient, migrations: HBPostgresMigrations, configuration: HBPostgresQueue.Configuration = .init(), logger: Logger) async -> Self {
+        await Self(client: client, migrations: migrations, configuration: configuration, logger: logger)
     }
 }

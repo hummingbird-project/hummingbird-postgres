@@ -15,6 +15,7 @@
 import Atomics
 import Hummingbird
 import HummingbirdJobs
+@testable @_spi(ConnectionPool) import HummingbirdPostgres
 @testable @_spi(ConnectionPool) import HummingbirdJobsPostgres
 import HummingbirdXCT
 import NIOConcurrencyHelpers
@@ -40,9 +41,9 @@ final class JobsTests: XCTestCase {
 
     static let env = HBEnvironment()
 
-    func createJobQueue(numWorkers: Int, configuration: HBPostgresQueue.Configuration) async throws -> HBJobQueue<HBPostgresQueue> {
+    func createJobQueue(numWorkers: Int, configuration: HBPostgresQueue.Configuration, function: String = #function) async throws -> HBJobQueue<HBPostgresQueue> {
         let logger = {
-            var logger = Logger(label: "JobsTests")
+            var logger = Logger(label: function)
             logger.logLevel = .debug
             return logger
         }()
@@ -50,9 +51,11 @@ final class JobsTests: XCTestCase {
             configuration: getPostgresConfiguration(),
             backgroundLogger: logger
         )
-        return HBJobQueue(
+        let postgresMigrations = HBPostgresMigrations()
+        return await HBJobQueue(
             HBPostgresQueue(
                 client: postgresClient,
+                migrations: postgresMigrations,
                 configuration: configuration,
                 logger: logger
             ),
@@ -67,6 +70,7 @@ final class JobsTests: XCTestCase {
     /// shutdown correctly
     @discardableResult public func testJobQueue<T>(
         jobQueue: HBJobQueue<HBPostgresQueue>,
+        revertMigrations: Bool = false,
         test: (HBJobQueue<HBPostgresQueue>) async throws -> T
     ) async throws -> T {
         do {
@@ -81,8 +85,14 @@ final class JobsTests: XCTestCase {
                 group.addTask {
                     try await serviceGroup.run()
                 }
-                try await Task.sleep(for: .seconds(1))
                 do {
+                    let migrations = jobQueue.queue.migrations
+                    let client = jobQueue.queue.client
+                    let logger = jobQueue.queue.logger
+                    if revertMigrations {
+                        try await migrations.revert(client: client, groups: [.jobQueue], logger: logger, dryRun: false)
+                    }
+                    try await migrations.apply(client: client, groups: [.jobQueue], logger: logger, dryRun: false)
                     let value = try await test(jobQueue)
                     await serviceGroup.triggerGracefulShutdown()
                     return value
@@ -108,10 +118,12 @@ final class JobsTests: XCTestCase {
     @discardableResult public func testJobQueue<T>(
         numWorkers: Int,
         configuration: HBPostgresQueue.Configuration = .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
+        revertMigrations: Bool = true,
+        function: String = #function,
         test: (HBJobQueue<HBPostgresQueue>) async throws -> T
     ) async throws -> T {
-        let jobQueue = try await self.createJobQueue(numWorkers: numWorkers, configuration: configuration)
-        return try await self.testJobQueue(jobQueue: jobQueue, test: test)
+        let jobQueue = try await self.createJobQueue(numWorkers: numWorkers, configuration: configuration, function: function)
+        return try await self.testJobQueue(jobQueue: jobQueue, revertMigrations: revertMigrations, test: test)
     }
 
     func testBasic() async throws {
@@ -218,8 +230,7 @@ final class JobsTests: XCTestCase {
     func testShutdownJob() async throws {
         let jobIdentifer = HBJobIdentifier<Int>(#function)
         let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 1)
-        var logger = Logger(label: "HummingbirdJobsTests")
-        logger.logLevel = .trace
+
         try await self.testJobQueue(numWorkers: 4) { jobQueue in
             jobQueue.registerJob(jobIdentifer) { _, _ in
                 expectation.fulfill()
@@ -228,8 +239,8 @@ final class JobsTests: XCTestCase {
             try await jobQueue.push(id: jobIdentifer, parameters: 0)
             await self.wait(for: [expectation], timeout: 5)
 
-            let failedJobs = try await jobQueue.queue.getJobs(withStatus: .processing)
-            XCTAssertEqual(failedJobs.count, 1)
+            let processingJobs = try await jobQueue.queue.getJobs(withStatus: .processing)
+            XCTAssertEqual(processingJobs.count, 1)
             let pendingJobs = try await jobQueue.queue.getJobs(withStatus: .pending)
             XCTAssertEqual(pendingJobs.count, 0)
             return jobQueue
@@ -276,7 +287,7 @@ final class JobsTests: XCTestCase {
         }
         let jobQueue = try await createJobQueue(numWorkers: 1, configuration: .init(pendingJobsInitialization: .remove, failedJobsInitialization: .rerun))
         jobQueue.registerJob(job)
-        try await self.testJobQueue(jobQueue: jobQueue) { jobQueue in
+        try await self.testJobQueue(jobQueue: jobQueue, revertMigrations: true) { jobQueue in
 
             try await jobQueue.push(id: jobIdentifer, parameters: 0)
 
@@ -301,7 +312,7 @@ final class JobsTests: XCTestCase {
         let jobIdentifer = HBJobIdentifier<Int>(#function)
         let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 200)
         let logger = {
-            var logger = Logger(label: "HummingbirdJobsTests")
+            var logger = Logger(label: "testMultipleJobQueueHandlers")
             logger.logLevel = .debug
             return logger
         }()
@@ -314,14 +325,23 @@ final class JobsTests: XCTestCase {
             configuration: getPostgresConfiguration(),
             backgroundLogger: logger
         )
-        let jobQueue = HBJobQueue(
-            .postgres(client: postgresClient, logger: logger),
+        let postgresMigrations = HBPostgresMigrations()
+        let jobQueue = await HBJobQueue(
+            .postgres(
+                client: postgresClient,
+                migrations: postgresMigrations,
+                configuration: .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
+                logger: logger
+            ),
             numWorkers: 2,
             logger: logger
         )
-        let jobQueue2 = HBJobQueue(
+        let postgresMigrations2 = HBPostgresMigrations()
+        let jobQueue2 = await HBJobQueue(
             HBPostgresQueue(
                 client: postgresClient,
+                migrations: postgresMigrations2,
+                configuration: .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
                 logger: logger
             ),
             numWorkers: 2,
@@ -341,6 +361,8 @@ final class JobsTests: XCTestCase {
             group.addTask {
                 try await serviceGroup.run()
             }
+            try await postgresMigrations.apply(client: postgresClient, groups: [.jobQueue], logger: logger, dryRun: false)
+            try await postgresMigrations2.apply(client: postgresClient, groups: [.jobQueue], logger: logger, dryRun: false)
             do {
                 for i in 0..<200 {
                     try await jobQueue.push(id: jobIdentifer, parameters: i)

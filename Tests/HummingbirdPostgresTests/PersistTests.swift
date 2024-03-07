@@ -34,13 +34,17 @@ final class PersistTests: XCTestCase {
                 }
             }
         }
-        var logger = Logger(label: "PersistTests")
-        logger.logLevel = .debug
+        let logger = {
+            var logger = Logger(label: "PersistTests")
+            logger.logLevel = .debug
+            return logger
+        }()
         let postgresClient = try await PostgresClient(
             configuration: getPostgresConfiguration(),
             backgroundLogger: logger
         )
-        let persist = HBPostgresPersistDriver(client: postgresClient, logger: logger)
+        let postgresMigrations = HBPostgresMigrations()
+        let persist = await HBPostgresPersistDriver(client: postgresClient, migrations: postgresMigrations, logger: logger)
         let router = HBRouter()
         router.middlewares.add(PostgresErrorMiddleware())
         router.put("/persist/:tag") { request, context -> HTTPResponse.Status in
@@ -69,8 +73,7 @@ final class PersistTests: XCTestCase {
         var app = HBApplication(responder: router.buildResponder())
         app.addServices(PostgresClientService(client: postgresClient), persist)
         app.runBeforeServerStart {
-            // temporary fix to ensure persist table is created before we use it
-            try await Task.sleep(for: .milliseconds(400))
+            try await postgresMigrations.apply(client: postgresClient, groups: [.persist], logger: logger, dryRun: false)
         }
 
         return app
