@@ -21,9 +21,9 @@ import ServiceLifecycle
 import XCTest
 
 final class PersistTests: XCTestCase {
-    func createApplication(_ updateRouter: (HBRouter<HBBasicRequestContext>, HBPersistDriver) -> Void = { _, _ in }) async throws -> some HBApplicationProtocol {
-        struct PostgresErrorMiddleware<Context: HBBaseRequestContext>: HBMiddlewareProtocol {
-            func handle(_ request: HBRequest, context: Context, next: (HBRequest, Context) async throws -> HBResponse) async throws -> HBResponse {
+    func createApplication(_ updateRouter: (Router<BasicRequestContext>, PersistDriver) -> Void = { _, _ in }) async throws -> some ApplicationProtocol {
+        struct PostgresErrorMiddleware<Context: BaseRequestContext>: RouterMiddleware {
+            func handle(_ request: Request, context: Context, next: (Request, Context) async throws -> Response) async throws -> Response {
                 do {
                     return try await next(request, context)
                 } catch let error as PSQLError {
@@ -43,9 +43,9 @@ final class PersistTests: XCTestCase {
             configuration: getPostgresConfiguration(),
             backgroundLogger: logger
         )
-        let postgresMigrations = HBPostgresMigrations()
-        let persist = await HBPostgresPersistDriver(client: postgresClient, migrations: postgresMigrations, logger: logger)
-        let router = HBRouter()
+        let postgresMigrations = PostgresMigrations()
+        let persist = await PostgresPersistDriver(client: postgresClient, migrations: postgresMigrations, logger: logger)
+        let router = Router()
         router.middlewares.add(PostgresErrorMiddleware())
         router.put("/persist/:tag") { request, context -> HTTPResponse.Status in
             let buffer = try await request.body.collect(upTo: .max)
@@ -54,23 +54,23 @@ final class PersistTests: XCTestCase {
             return .ok
         }
         router.put("/persist/:tag/:time") { request, context -> HTTPResponse.Status in
-            guard let time = context.parameters.get("time", as: Int.self) else { throw HBHTTPError(.badRequest) }
+            guard let time = context.parameters.get("time", as: Int.self) else { throw HTTPError(.badRequest) }
             let buffer = try await request.body.collect(upTo: .max)
             let tag = try context.parameters.require("tag")
             try await persist.set(key: tag, value: String(buffer: buffer), expires: .seconds(time))
             return .ok
         }
         router.get("/persist/:tag") { _, context -> String? in
-            guard let tag = context.parameters.get("tag", as: String.self) else { throw HBHTTPError(.badRequest) }
+            guard let tag = context.parameters.get("tag", as: String.self) else { throw HTTPError(.badRequest) }
             return try await persist.get(key: tag, as: String.self)
         }
         router.delete("/persist/:tag") { _, context -> HTTPResponse.Status in
-            guard let tag = context.parameters.get("tag", as: String.self) else { throw HBHTTPError(.badRequest) }
+            guard let tag = context.parameters.get("tag", as: String.self) else { throw HTTPError(.badRequest) }
             try await persist.remove(key: tag)
             return .noContent
         }
         updateRouter(router, persist)
-        var app = HBApplication(responder: router.buildResponder())
+        var app = Application(responder: router.buildResponder())
         app.addServices(PostgresClientService(client: postgresClient), persist)
         app.runBeforeServerStart {
             try await postgresMigrations.apply(client: postgresClient, groups: [.persist], logger: logger, dryRun: false)
@@ -117,8 +117,8 @@ final class PersistTests: XCTestCase {
                 let tag = try context.parameters.require("tag")
                 do {
                     try await persist.create(key: tag, value: String(buffer: buffer))
-                } catch let error as HBPersistError where error == .duplicate {
-                    throw HBHTTPError(.conflict)
+                } catch let error as PersistError where error == .duplicate {
+                    throw HTTPError(.conflict)
                 }
                 return .ok
             }
@@ -176,13 +176,13 @@ final class PersistTests: XCTestCase {
         }
         let app = try await self.createApplication { router, persist in
             router.put("/codable/:tag") { request, context -> HTTPResponse.Status in
-                guard let tag = context.parameters.get("tag") else { throw HBHTTPError(.badRequest) }
+                guard let tag = context.parameters.get("tag") else { throw HTTPError(.badRequest) }
                 let buffer = try await request.body.collect(upTo: .max)
                 try await persist.set(key: tag, value: TestCodable(buffer: String(buffer: buffer)))
                 return .ok
             }
             router.get("/codable/:tag") { _, context -> String? in
-                guard let tag = context.parameters.get("tag") else { throw HBHTTPError(.badRequest) }
+                guard let tag = context.parameters.get("tag") else { throw HTTPError(.badRequest) }
                 let value = try await persist.get(key: tag, as: TestCodable.self)
                 return value?.buffer
             }

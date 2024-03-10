@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 ///  Error thrown by migration code
-public struct HBPostgresMigrationError: Error, Equatable {
+public struct PostgresMigrationError: Error, Equatable {
     enum _Internal {
         case requiresChanges
         case cannotRevertMigration
@@ -28,6 +28,6 @@ public struct HBPostgresMigrationError: Error, Equatable {
     /// The database requires a migration before the application can run
     static var requiresChanges: Self { .init(.requiresChanges) }
     /// Cannot revert a migration as we do not have its details. Add it to the revert list using
-    /// HBPostgresMigrations.add(revert:)
+    /// PostgresMigrations.add(revert:)
     static var cannotRevertMigration: Self { .init(.cannotRevertMigration) }
 }

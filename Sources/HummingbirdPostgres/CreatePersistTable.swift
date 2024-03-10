@@ -15,7 +15,7 @@
 import Logging
 @_spi(ConnectionPool) import PostgresNIO
 
-struct CreatePersistTable: HBPostgresMigration {
+struct CreatePersistTable: PostgresMigration {
     func apply(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
             """
@@ -37,10 +37,10 @@ struct CreatePersistTable: HBPostgresMigration {
     }
 
     var name: String { "_Create_Persist_Table_" }
-    var group: HBMigrationGroup { .persist }
+    var group: MigrationGroup { .persist }
 }
 
-extension HBMigrationGroup {
+extension MigrationGroup {
     /// Persist driver migration group
     public static var persist: Self { .init("_hb_pg_persist") }
 }

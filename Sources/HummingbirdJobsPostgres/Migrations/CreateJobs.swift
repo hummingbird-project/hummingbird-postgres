@@ -16,7 +16,7 @@ import HummingbirdPostgres
 import Logging
 @_spi(ConnectionPool) import PostgresNIO
 
-struct CreateJobs: HBPostgresMigration {
+struct CreateJobs: PostgresMigration {
     func apply(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
             """
@@ -39,10 +39,10 @@ struct CreateJobs: HBPostgresMigration {
     }
 
     var name: String { "_Create_Jobs_Table_" }
-    var group: HBMigrationGroup { .jobQueue }
+    var group: MigrationGroup { .jobQueue }
 }
 
-extension HBMigrationGroup {
+extension MigrationGroup {
     /// JobQueue migration group
     public static var jobQueue: Self { .init("_hb_jobqueue") }
 }

@@ -6,7 +6,7 @@ import XCTest
 
 final class MigrationTests: XCTestCase {
     /// Test migration used to verify order or apply and reverts
-    struct TestMigration: HBPostgresMigration {
+    struct TestMigration: PostgresMigration {
         class Order {
             var value: Int
 
@@ -25,7 +25,7 @@ final class MigrationTests: XCTestCase {
             order: Order = Order(),
             applyOrder: Int? = nil,
             revertOrder: Int? = nil,
-            group: HBMigrationGroup = .default
+            group: MigrationGroup = .default
         ) {
             self.order = order
             self.name = name
@@ -47,7 +47,7 @@ final class MigrationTests: XCTestCase {
         }
 
         let name: String
-        let group: HBMigrationGroup
+        let group: MigrationGroup
         let order: Order
         let expectedApply: Int?
         let expectedRevert: Int?
@@ -59,9 +59,9 @@ final class MigrationTests: XCTestCase {
 
     func testMigrations(
         revert: Bool = true,
-        groups: [HBMigrationGroup] = [.default],
-        _ setup: (HBPostgresMigrations) async throws -> Void,
-        verify: (HBPostgresMigrations, PostgresClient) async throws -> Void
+        groups: [MigrationGroup] = [.default],
+        _ setup: (PostgresMigrations) async throws -> Void,
+        verify: (PostgresMigrations, PostgresClient) async throws -> Void
     ) async throws {
         let logger = {
             var logger = Logger(label: "MigrationTests")
@@ -72,7 +72,7 @@ final class MigrationTests: XCTestCase {
             configuration: getPostgresConfiguration(),
             backgroundLogger: logger
         )
-        let migrations = HBPostgresMigrations()
+        let migrations = PostgresMigrations()
         try await setup(migrations)
         do {
             try await withThrowingTaskGroup(of: Void.self) { group in
@@ -93,8 +93,8 @@ final class MigrationTests: XCTestCase {
         }
     }
 
-    func getAll(client: PostgresClient, groups: [HBMigrationGroup] = [.default]) async throws -> [String] {
-        let repository = HBPostgresMigrationRepository(client: client)
+    func getAll(client: PostgresClient, groups: [MigrationGroup] = [.default]) async throws -> [String] {
+        let repository = PostgresMigrationRepository(client: client)
         return try await repository.withContext(logger: self.logger) { context in
             try await repository.getAll(context: context).compactMap { migration in
                 if groups.first(where: { group in return group == migration.group }) != nil {
@@ -219,7 +219,7 @@ final class MigrationTests: XCTestCase {
                 try await migrations.apply(client: client, groups: [.default], logger: self.logger, dryRun: true)
             }
             XCTFail("Shouldn't get here")
-        } catch let error as HBPostgresMigrationError where error == .requiresChanges {}
+        } catch let error as PostgresMigrationError where error == .requiresChanges {}
         try await self.testMigrations(groups: [.default, .test]) { migrations in
             await migrations.add(TestMigration(name: "test1"))
             await migrations.add(TestMigration(name: "test2"))
@@ -336,6 +336,6 @@ final class MigrationTests: XCTestCase {
     }
 }
 
-extension HBMigrationGroup {
+extension MigrationGroup {
     static var test: Self { .init("test") }
 }
