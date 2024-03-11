@@ -28,7 +28,7 @@ extension PSQLError {
 }
 
 /// Fluent driver for persist system for storing persistent cross request key/value pairs
-public final class HBPostgresPersistDriver: HBPersistDriver {
+public final class PostgresPersistDriver: PersistDriver {
     struct WrapperObject<Value: Codable>: PostgresCodable, Codable {
         let value: Value
 
@@ -50,14 +50,14 @@ public final class HBPostgresPersistDriver: HBPersistDriver {
     let client: PostgresClient
     let logger: Logger
     let tidyUpFrequency: Duration
-    let migrations: HBPostgresMigrations
+    let migrations: PostgresMigrations
 
-    /// Initialize HBFluentPersistDriver
+    /// Initialize FluentPersistDriver
     /// - Parameters:
     ///   - client: Postgres client
     ///   - tidyUpFrequequency: How frequently cleanup expired database entries should occur
     @_spi(ConnectionPool)
-    public init(client: PostgresClient, migrations: HBPostgresMigrations, tidyUpFrequency: Duration = .seconds(600), logger: Logger) async {
+    public init(client: PostgresClient, migrations: PostgresMigrations, tidyUpFrequency: Duration = .seconds(600), logger: Logger) async {
         self.client = client
         self.logger = logger
         self.tidyUpFrequency = tidyUpFrequency
@@ -76,7 +76,7 @@ public final class HBPostgresPersistDriver: HBPersistDriver {
                 )
             } catch let error as PSQLError {
                 if error.serverError == .uniqueViolation {
-                    throw HBPersistError.duplicate
+                    throw PersistError.duplicate
                 } else {
                     throw error
                 }
@@ -138,7 +138,7 @@ public final class HBPostgresPersistDriver: HBPersistDriver {
 }
 
 /// Service protocol requirements
-extension HBPostgresPersistDriver {
+extension PostgresPersistDriver {
     public func run() async throws {
         self.logger.info("Waiting for persist driver migrations to complete")
         try await self.migrations.waitUntilCompleted()

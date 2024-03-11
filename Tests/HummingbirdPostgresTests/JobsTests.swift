@@ -39,9 +39,9 @@ final class JobsTests: XCTestCase {
         #endif
     }
 
-    static let env = HBEnvironment()
+    static let env = Environment()
 
-    func createJobQueue(numWorkers: Int, configuration: HBPostgresQueue.Configuration, function: String = #function) async throws -> HBJobQueue<HBPostgresQueue> {
+    func createJobQueue(numWorkers: Int, configuration: PostgresQueue.Configuration, function: String = #function) async throws -> JobQueue<PostgresQueue> {
         let logger = {
             var logger = Logger(label: function)
             logger.logLevel = .debug
@@ -51,9 +51,9 @@ final class JobsTests: XCTestCase {
             configuration: getPostgresConfiguration(),
             backgroundLogger: logger
         )
-        let postgresMigrations = HBPostgresMigrations()
-        return await HBJobQueue(
-            HBPostgresQueue(
+        let postgresMigrations = PostgresMigrations()
+        return await JobQueue(
+            PostgresQueue(
                 client: postgresClient,
                 migrations: postgresMigrations,
                 configuration: configuration,
@@ -69,9 +69,9 @@ final class JobsTests: XCTestCase {
     /// Creates test client, runs test function abd ensures everything is
     /// shutdown correctly
     @discardableResult public func testJobQueue<T>(
-        jobQueue: HBJobQueue<HBPostgresQueue>,
+        jobQueue: JobQueue<PostgresQueue>,
         revertMigrations: Bool = false,
-        test: (HBJobQueue<HBPostgresQueue>) async throws -> T
+        test: (JobQueue<PostgresQueue>) async throws -> T
     ) async throws -> T {
         do {
             return try await withThrowingTaskGroup(of: Void.self) { group in
@@ -117,10 +117,10 @@ final class JobsTests: XCTestCase {
     /// shutdown correctly
     @discardableResult public func testJobQueue<T>(
         numWorkers: Int,
-        configuration: HBPostgresQueue.Configuration = .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
+        configuration: PostgresQueue.Configuration = .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
         revertMigrations: Bool = true,
         function: String = #function,
-        test: (HBJobQueue<HBPostgresQueue>) async throws -> T
+        test: (JobQueue<PostgresQueue>) async throws -> T
     ) async throws -> T {
         let jobQueue = try await self.createJobQueue(numWorkers: numWorkers, configuration: configuration, function: function)
         return try await self.testJobQueue(jobQueue: jobQueue, revertMigrations: revertMigrations, test: test)
@@ -128,9 +128,9 @@ final class JobsTests: XCTestCase {
 
     func testBasic() async throws {
         let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 10)
-        let jobIdentifer = HBJobIdentifier<Int>(#function)
+        let jobIdentifer = JobIdentifier<Int>(#function)
         try await self.testJobQueue(numWorkers: 1) { jobQueue in
-            jobQueue.registerJob(jobIdentifer) { parameters, context in
+            jobQueue.registerJob(id: jobIdentifer) { parameters, context in
                 context.logger.info("Parameters=\(parameters)")
                 try await Task.sleep(for: .milliseconds(Int.random(in: 10..<50)))
                 expectation.fulfill()
@@ -151,13 +151,13 @@ final class JobsTests: XCTestCase {
     }
 
     func testMultipleWorkers() async throws {
-        let jobIdentifer = HBJobIdentifier<Int>(#function)
+        let jobIdentifer = JobIdentifier<Int>(#function)
         let runningJobCounter = ManagedAtomic(0)
         let maxRunningJobCounter = ManagedAtomic(0)
         let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 10)
 
         try await self.testJobQueue(numWorkers: 4) { jobQueue in
-            jobQueue.registerJob(jobIdentifer) { parameters, context in
+            jobQueue.registerJob(id: jobIdentifer) { parameters, context in
                 let runningJobs = runningJobCounter.wrappingIncrementThenLoad(by: 1, ordering: .relaxed)
                 if runningJobs > maxRunningJobCounter.load(ordering: .relaxed) {
                     maxRunningJobCounter.store(runningJobs, ordering: .relaxed)
@@ -187,11 +187,11 @@ final class JobsTests: XCTestCase {
     }
 
     func testErrorRetryCount() async throws {
-        let jobIdentifer = HBJobIdentifier<Int>(#function)
+        let jobIdentifer = JobIdentifier<Int>(#function)
         let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 4)
         struct FailedError: Error {}
         try await self.testJobQueue(numWorkers: 1) { jobQueue in
-            jobQueue.registerJob(jobIdentifer, maxRetryCount: 3) { _, _ in
+            jobQueue.registerJob(id: jobIdentifer, maxRetryCount: 3) { _, _ in
                 expectation.fulfill()
                 throw FailedError()
             }
@@ -213,9 +213,9 @@ final class JobsTests: XCTestCase {
             let message: String
         }
         let expectation = XCTestExpectation(description: "TestJob.execute was called")
-        let jobIdentifer = HBJobIdentifier<TestJobParameters>(#function)
+        let jobIdentifer = JobIdentifier<TestJobParameters>(#function)
         try await self.testJobQueue(numWorkers: 1) { jobQueue in
-            jobQueue.registerJob(jobIdentifer) { parameters, _ in
+            jobQueue.registerJob(id: jobIdentifer) { parameters, _ in
                 XCTAssertEqual(parameters.id, 23)
                 XCTAssertEqual(parameters.message, "Hello!")
                 expectation.fulfill()
@@ -228,11 +228,11 @@ final class JobsTests: XCTestCase {
 
     /// Test job is cancelled on shutdown
     func testShutdownJob() async throws {
-        let jobIdentifer = HBJobIdentifier<Int>(#function)
+        let jobIdentifer = JobIdentifier<Int>(#function)
         let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 1)
 
         try await self.testJobQueue(numWorkers: 4) { jobQueue in
-            jobQueue.registerJob(jobIdentifer) { _, _ in
+            jobQueue.registerJob(id: jobIdentifer) { _, _ in
                 expectation.fulfill()
                 try await Task.sleep(for: .milliseconds(1000))
             }
@@ -250,12 +250,12 @@ final class JobsTests: XCTestCase {
     /// test job fails to decode but queue continues to process
     func testFailToDecode() async throws {
         let string: NIOLockedValueBox<String> = .init("")
-        let jobIdentifer1 = HBJobIdentifier<Int>(#function)
-        let jobIdentifer2 = HBJobIdentifier<String>(#function)
+        let jobIdentifer1 = JobIdentifier<Int>(#function)
+        let jobIdentifer2 = JobIdentifier<String>(#function)
         let expectation = XCTestExpectation(description: "job was called", expectedFulfillmentCount: 1)
 
         try await self.testJobQueue(numWorkers: 4) { jobQueue in
-            jobQueue.registerJob(jobIdentifer2) { parameters, _ in
+            jobQueue.registerJob(id: jobIdentifer2) { parameters, _ in
                 string.withLockedValue { $0 = parameters }
                 expectation.fulfill()
             }
@@ -272,12 +272,12 @@ final class JobsTests: XCTestCase {
     /// is then rerun on startup of new server
     func testRerunAtStartup() async throws {
         struct RetryError: Error {}
-        let jobIdentifer = HBJobIdentifier<Int>(#function)
+        let jobIdentifer = JobIdentifier<Int>(#function)
         let firstTime = ManagedAtomic(true)
         let finished = ManagedAtomic(false)
         let failedExpectation = XCTestExpectation(description: "TestJob failed", expectedFulfillmentCount: 1)
         let succeededExpectation = XCTestExpectation(description: "TestJob2 succeeded", expectedFulfillmentCount: 1)
-        let job = HBJobDefinition(id: jobIdentifer) { _, _ in
+        let job = JobDefinition(id: jobIdentifer) { _, _ in
             if firstTime.compareExchange(expected: true, desired: false, ordering: .relaxed).original {
                 failedExpectation.fulfill()
                 throw RetryError()
@@ -308,14 +308,14 @@ final class JobsTests: XCTestCase {
     }
 
     func testMultipleJobQueueHandlers() async throws {
-        let jobIdentifer = HBJobIdentifier<Int>(#function)
+        let jobIdentifer = JobIdentifier<Int>(#function)
         let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 200)
         let logger = {
             var logger = Logger(label: "testMultipleJobQueueHandlers")
             logger.logLevel = .debug
             return logger
         }()
-        let job = HBJobDefinition(id: jobIdentifer) { parameters, context in
+        let job = JobDefinition(id: jobIdentifer) { parameters, context in
             context.logger.info("Parameters=\(parameters)")
             try await Task.sleep(for: .milliseconds(Int.random(in: 10..<50)))
             expectation.fulfill()
@@ -324,8 +324,8 @@ final class JobsTests: XCTestCase {
             configuration: getPostgresConfiguration(),
             backgroundLogger: logger
         )
-        let postgresMigrations = HBPostgresMigrations()
-        let jobQueue = await HBJobQueue(
+        let postgresMigrations = PostgresMigrations()
+        let jobQueue = await JobQueue(
             .postgres(
                 client: postgresClient,
                 migrations: postgresMigrations,
@@ -335,9 +335,9 @@ final class JobsTests: XCTestCase {
             numWorkers: 2,
             logger: logger
         )
-        let postgresMigrations2 = HBPostgresMigrations()
-        let jobQueue2 = await HBJobQueue(
-            HBPostgresQueue(
+        let postgresMigrations2 = PostgresMigrations()
+        let jobQueue2 = await JobQueue(
+            PostgresQueue(
                 client: postgresClient,
                 migrations: postgresMigrations2,
                 configuration: .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),

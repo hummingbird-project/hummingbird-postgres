@@ -21,7 +21,7 @@ import NIOCore
 @_spi(ConnectionPool) import PostgresNIO
 
 @_spi(ConnectionPool)
-public final class HBPostgresQueue: HBJobQueueDriver {
+public final class PostgresQueue: JobQueueDriver {
     public typealias JobID = UUID
 
     /// what to do with failed/processing jobs from last time queue was handled
@@ -31,7 +31,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
         case remove
     }
 
-    /// Errors thrown by HBPostgresJobQueue
+    /// Errors thrown by PostgresJobQueue
     public enum PostgresQueueError: Error, CustomStringConvertible {
         case failedToAdd
 
@@ -77,11 +77,11 @@ public final class HBPostgresQueue: HBJobQueueDriver {
     /// Logger used by queue
     public let logger: Logger
 
-    let migrations: HBPostgresMigrations
+    let migrations: PostgresMigrations
     let isStopped: NIOLockedValueBox<Bool>
 
-    /// Initialize a HBPostgresJobQueue
-    public init(client: PostgresClient, migrations: HBPostgresMigrations, configuration: Configuration = .init(), logger: Logger) async {
+    /// Initialize a PostgresJobQueue
+    public init(client: PostgresClient, migrations: PostgresMigrations, configuration: Configuration = .init(), logger: Logger) async {
         self.client = client
         self.configuration = configuration
         self.logger = logger
@@ -112,7 +112,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
     /// - Returns: Identifier of queued job
     @discardableResult public func push(_ buffer: ByteBuffer) async throws -> JobID {
         try await self.client.withConnection { connection in
-            let queuedJob = HBQueuedJob<JobID>(id: .init(), jobBuffer: buffer)
+            let queuedJob = QueuedJob<JobID>(id: .init(), jobBuffer: buffer)
             try await add(queuedJob, connection: connection)
             try await addToQueue(jobId: queuedJob.id, connection: connection)
             return queuedJob.id
@@ -141,9 +141,9 @@ public final class HBPostgresQueue: HBJobQueueDriver {
     /// shutdown queue once all active jobs have been processed
     public func shutdownGracefully() async {}
 
-    func popFirst() async throws -> HBQueuedJob<JobID>? {
+    func popFirst() async throws -> QueuedJob<JobID>? {
         do {
-            return try await self.client.withConnection { connection -> HBQueuedJob? in
+            return try await self.client.withConnection { connection -> QueuedJob? in
                 while true {
                     try Task.checkCancellation()
                     let stream = try await connection.query(
@@ -176,7 +176,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
                         guard let buffer = try await stream2.decode(ByteBuffer.self, context: .default).first(where: { _ in true }) else {
                             continue
                         }
-                        return HBQueuedJob(id: jobId, jobBuffer: buffer)
+                        return QueuedJob(id: jobId, jobBuffer: buffer)
                     } catch {
                         try await self.setStatus(jobId: jobId, status: .failed, connection: connection)
                         throw JobQueueError.decodeJobFailed
@@ -189,7 +189,7 @@ public final class HBPostgresQueue: HBJobQueueDriver {
         }
     }
 
-    func add(_ job: HBQueuedJob<JobID>, connection: PostgresConnection) async throws {
+    func add(_ job: QueuedJob<JobID>, connection: PostgresConnection) async throws {
         try await connection.query(
             """
             INSERT INTO _hb_pg_jobs (id, job, status)
@@ -256,10 +256,10 @@ public final class HBPostgresQueue: HBJobQueueDriver {
     }
 }
 
-/// extend HBPostgresJobQueue to conform to AsyncSequence
-extension HBPostgresQueue {
+/// extend PostgresJobQueue to conform to AsyncSequence
+extension PostgresQueue {
     public struct AsyncIterator: AsyncIteratorProtocol {
-        let queue: HBPostgresQueue
+        let queue: PostgresQueue
 
         public func next() async throws -> Element? {
             while true {
@@ -281,13 +281,13 @@ extension HBPostgresQueue {
 }
 
 @_spi(ConnectionPool)
-extension HBJobQueueDriver where Self == HBPostgresQueue {
+extension JobQueueDriver where Self == PostgresQueue {
     /// Return Postgres driver for Job Queue
     /// - Parameters:
     ///   - client: Postgres client
     ///   - configuration: Queue configuration
     ///   - logger: Logger used by queue
-    public static func postgres(client: PostgresClient, migrations: HBPostgresMigrations, configuration: HBPostgresQueue.Configuration = .init(), logger: Logger) async -> Self {
+    public static func postgres(client: PostgresClient, migrations: PostgresMigrations, configuration: PostgresQueue.Configuration = .init(), logger: Logger) async -> Self {
         await Self(client: client, migrations: migrations, configuration: configuration, logger: logger)
     }
 }
