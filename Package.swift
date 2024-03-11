@@ -10,7 +10,7 @@ let package = Package(
         .library(name: "HummingbirdPostgres", targets: ["HummingbirdPostgres"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/hummingbird-project/hummingbird.git", branch: "remove-hb-prefix"),
+        .package(url: "https://github.com/hummingbird-project/hummingbird.git", branch: "main"),
         .package(url: "https://github.com/vapor/postgres-nio", from: "1.20.0"),
     ],
     targets: [
