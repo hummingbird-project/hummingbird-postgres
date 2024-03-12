@@ -14,13 +14,13 @@
 
 import Foundation
 import HummingbirdJobs
-@_spi(ConnectionPool) import HummingbirdPostgres
+import HummingbirdPostgres
 import Logging
 import NIOConcurrencyHelpers
 import NIOCore
-@_spi(ConnectionPool) import PostgresNIO
+import PostgresNIO
 
-@_spi(ConnectionPool)
+
 public final class PostgresQueue: JobQueueDriver {
     public typealias JobID = UUID
 
@@ -280,7 +280,7 @@ extension PostgresQueue {
     }
 }
 
-@_spi(ConnectionPool)
+
 extension JobQueueDriver where Self == PostgresQueue {
     /// Return Postgres driver for Job Queue
     /// - Parameters:

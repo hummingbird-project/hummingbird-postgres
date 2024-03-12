@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Logging
-@_spi(ConnectionPool) import PostgresNIO
+import PostgresNIO
 
 /// Database migration support
 public actor PostgresMigrations {
@@ -63,7 +63,7 @@ public actor PostgresMigrations {
     ///   - client: Postgres client
     ///   - logger: Logger to use
     ///   - dryRun: Should migrations actually be applied, or should we just report what would be applied and reverted
-    @_spi(ConnectionPool)
+
     public func apply(client: PostgresClient, groups: [MigrationGroup] = [], logger: Logger, dryRun: Bool) async throws {
         try await self.migrate(client: client, migrations: self.migrations, groups: groups, logger: logger, completeMigrations: true, dryRun: dryRun)
     }
@@ -73,7 +73,7 @@ public actor PostgresMigrations {
     ///   - client: Postgres client
     ///   - logger: Logger to use
     ///   - dryRun: Should migrations actually be reverted, or should we just report what would be reverted
-    @_spi(ConnectionPool)
+
     public func revert(client: PostgresClient, groups: [MigrationGroup] = [], logger: Logger, dryRun: Bool) async throws {
         try await self.migrate(client: client, migrations: [], groups: groups, logger: logger, completeMigrations: false, dryRun: dryRun)
     }

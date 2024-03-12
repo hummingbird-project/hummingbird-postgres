@@ -1,5 +1,5 @@
 import Hummingbird
-@_spi(ConnectionPool) import PostgresNIO
+import PostgresNIO
 import ServiceLifecycle
 
 /// Manage the lifecycle of a PostgresClient

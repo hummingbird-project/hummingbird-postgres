@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Logging
-@_spi(ConnectionPool) import PostgresNIO
+import PostgresNIO
 
 /// Protocol for a database migration
 ///
