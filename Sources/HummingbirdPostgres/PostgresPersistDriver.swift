@@ -101,13 +101,13 @@ public final class PostgresPersistDriver: PersistDriver {
             "SELECT data, expires FROM _hb_pg_persist WHERE id = \(key)",
             logger: self.logger
         )
-        guard let result = try await stream.decode((WrapperObject<Object>, Date).self)
+        guard let (object, expires) = try await stream.decode((WrapperObject<Object>, Date).self)
             .first(where: { _ in true })
         else {
             return nil
         }
-        guard result.1 > .now else { return nil }
-        return result.0.value
+        guard expires > .now else { return nil }
+        return object.value
     }
 
     /// Remove key
