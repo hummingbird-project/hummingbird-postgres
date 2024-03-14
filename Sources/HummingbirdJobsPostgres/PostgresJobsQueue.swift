@@ -20,6 +20,28 @@ import NIOConcurrencyHelpers
 import NIOCore
 import PostgresNIO
 
+/// Postgres Job queue implementation
+///
+/// The Postgres driver uses the database migration service ``/HummingbirdPostgres/PostgresMigrations``
+/// to create its database tables. Before the server is running you should run the migrations
+/// to build your table.
+/// ```
+/// let migrations = PostgresMigrations()
+/// let jobqueue = await JobQueue(
+///     PostgresQueue(
+///         client: postgresClient,
+///         migrations: postgresMigrations,
+///         configuration: configuration,
+///         logger: logger
+///    ),
+///    numWorkers: numWorkers,
+///    logger: logger
+/// )
+/// var app = Application(...)
+/// app.runBeforeServerStart {
+///     try await migrations.apply(client: postgresClient, logger: logger, dryRun: applyMigrations)
+/// }
+/// ```
 public final class PostgresQueue: JobQueueDriver {
     public typealias JobID = UUID
 
