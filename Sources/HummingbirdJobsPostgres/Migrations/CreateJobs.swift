@@ -39,10 +39,10 @@ struct CreateJobs: PostgresMigration {
     }
 
     var name: String { "_Create_Jobs_Table_" }
-    var group: MigrationGroup { .jobQueue }
+    var group: PostgresMigrationGroup { .jobQueue }
 }
 
-extension MigrationGroup {
+extension PostgresMigrationGroup {
     /// JobQueue migration group
     public static var jobQueue: Self { .init("_hb_jobqueue") }
 }

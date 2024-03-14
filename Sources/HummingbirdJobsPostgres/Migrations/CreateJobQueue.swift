@@ -44,5 +44,5 @@ struct CreateJobQueue: PostgresMigration {
     }
 
     var name: String { "_Create_JobQueue_Table_" }
-    var group: MigrationGroup { .jobQueue }
+    var group: PostgresMigrationGroup { .jobQueue }
 }

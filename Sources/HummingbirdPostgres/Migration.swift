@@ -26,21 +26,21 @@ public protocol PostgresMigration {
     /// Migration name
     var name: String { get }
     /// Group migration belongs to
-    var group: MigrationGroup { get }
+    var group: PostgresMigrationGroup { get }
 }
 
 extension PostgresMigration {
     /// Default implementaion of name
     public var name: String { String(describing: Self.self) }
     /// Default group is default
-    public var group: MigrationGroup { .default }
+    public var group: PostgresMigrationGroup { .default }
 }
 
 /// Group identifier for a group of migrations.
 ///
 /// Migrations in one group are treated independently of migrations in other groups. You can add a
 /// migration to a group and it will not affect any subsequent migrations not in that group. By default
-/// all migrations belong to the ``MigrationGroup.default`` group.
+/// all migrations belong to the ``default`` group.
 ///
 /// To add a migration to a separate group you first need to define the group by adding a static variable
 /// to `MigrationGroup`.
@@ -49,12 +49,12 @@ extension PostgresMigration {
 ///     public static var `myGroup`: Self { .init("myGroup") }
 /// }
 /// ```
-/// After that use to ``PostgresMigration.group`` set the group for a migration.
+/// After that set ``PostgresMigration.group`` to `.myGroup`.
 ///
 /// Only use a group different from `.default` if you are certain that the database elements you are
 /// creating within that group will always be independent of everything else in the database. Groups
 /// are useful for libraries that use migrations to setup their database elements.
-public struct MigrationGroup: Hashable, Equatable {
+public struct PostgresMigrationGroup: Hashable, Equatable {
     let name: String
 
     public init(_ name: String) {

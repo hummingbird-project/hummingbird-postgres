@@ -37,10 +37,10 @@ struct CreatePersistTable: PostgresMigration {
     }
 
     var name: String { "_Create_Persist_Table_" }
-    var group: MigrationGroup { .persist }
+    var group: PostgresMigrationGroup { .persist }
 }
 
-extension MigrationGroup {
+extension PostgresMigrationGroup {
     /// Persist driver migration group
     public static var persist: Self { .init("_hb_pg_persist") }
 }

@@ -25,7 +25,7 @@ final class MigrationTests: XCTestCase {
             order: Order = Order(),
             applyOrder: Int? = nil,
             revertOrder: Int? = nil,
-            group: MigrationGroup = .default
+            group: PostgresMigrationGroup = .default
         ) {
             self.order = order
             self.name = name
@@ -47,7 +47,7 @@ final class MigrationTests: XCTestCase {
         }
 
         let name: String
-        let group: MigrationGroup
+        let group: PostgresMigrationGroup
         let order: Order
         let expectedApply: Int?
         let expectedRevert: Int?
@@ -59,7 +59,7 @@ final class MigrationTests: XCTestCase {
 
     func testMigrations(
         revert: Bool = true,
-        groups: [MigrationGroup] = [.default],
+        groups: [PostgresMigrationGroup] = [.default],
         _ setup: (PostgresMigrations) async throws -> Void,
         verify: (PostgresMigrations, PostgresClient) async throws -> Void
     ) async throws {
@@ -93,7 +93,7 @@ final class MigrationTests: XCTestCase {
         }
     }
 
-    func getAll(client: PostgresClient, groups: [MigrationGroup] = [.default]) async throws -> [String] {
+    func getAll(client: PostgresClient, groups: [PostgresMigrationGroup] = [.default]) async throws -> [String] {
         let repository = PostgresMigrationRepository(client: client)
         return try await repository.withContext(logger: self.logger) { context in
             try await repository.getAll(context: context).compactMap { migration in
@@ -336,6 +336,6 @@ final class MigrationTests: XCTestCase {
     }
 }
 
-extension MigrationGroup {
+extension PostgresMigrationGroup {
     static var test: Self { .init("test") }
 }

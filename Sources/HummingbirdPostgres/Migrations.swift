@@ -64,7 +64,7 @@ public actor PostgresMigrations {
     ///   - logger: Logger to use
     ///   - dryRun: Should migrations actually be applied, or should we just report what would be applied and reverted
 
-    public func apply(client: PostgresClient, groups: [MigrationGroup] = [], logger: Logger, dryRun: Bool) async throws {
+    public func apply(client: PostgresClient, groups: [PostgresMigrationGroup] = [], logger: Logger, dryRun: Bool) async throws {
         try await self.migrate(client: client, migrations: self.migrations, groups: groups, logger: logger, completeMigrations: true, dryRun: dryRun)
     }
 
@@ -74,14 +74,14 @@ public actor PostgresMigrations {
     ///   - logger: Logger to use
     ///   - dryRun: Should migrations actually be reverted, or should we just report what would be reverted
 
-    public func revert(client: PostgresClient, groups: [MigrationGroup] = [], logger: Logger, dryRun: Bool) async throws {
+    public func revert(client: PostgresClient, groups: [PostgresMigrationGroup] = [], logger: Logger, dryRun: Bool) async throws {
         try await self.migrate(client: client, migrations: [], groups: groups, logger: logger, completeMigrations: false, dryRun: dryRun)
     }
 
     private func migrate(
         client: PostgresClient,
         migrations: [PostgresMigration],
-        groups: [MigrationGroup],
+        groups: [PostgresMigrationGroup],
         logger: Logger,
         completeMigrations: Bool,
         dryRun: Bool
@@ -234,12 +234,12 @@ struct PostgresMigrationRepository {
         )
     }
 
-    func getAll(context: Context) async throws -> [(name: String, group: MigrationGroup)] {
+    func getAll(context: Context) async throws -> [(name: String, group: PostgresMigrationGroup)] {
         let stream = try await context.connection.query(
             "SELECT \"name\", \"group\" FROM _hb_pg_migrations ORDER BY \"order\"",
             logger: context.logger
         )
-        var result: [(String, MigrationGroup)] = []
+        var result: [(String, PostgresMigrationGroup)] = []
         for try await (name, group) in stream.decode((String, String).self, context: .default) {
             result.append((name, .init(group)))
         }
