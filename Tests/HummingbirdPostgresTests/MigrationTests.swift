@@ -174,7 +174,7 @@ final class MigrationTests: XCTestCase {
         try await self.testMigrations { migrations in
             await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1))
             await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2))
-            await migrations.revert(TestMigration(name: "test3", order: order, applyOrder: 3, revertOrder: 4))
+            await migrations.register(TestMigration(name: "test3", order: order, applyOrder: 3, revertOrder: 4))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default], logger: self.logger, dryRun: false)
             let migrations = try await getAll(client: client)
@@ -198,7 +198,7 @@ final class MigrationTests: XCTestCase {
             await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1))
             await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2))
             await migrations.add(TestMigration(name: "test4", order: order, applyOrder: 5))
-            await migrations.revert(TestMigration(name: "test3", order: order, applyOrder: 3, revertOrder: 4))
+            await migrations.register(TestMigration(name: "test3", order: order, applyOrder: 3, revertOrder: 4))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default], logger: self.logger, dryRun: false)
             let migrations = try await getAll(client: client)
@@ -288,7 +288,7 @@ final class MigrationTests: XCTestCase {
         // Remove migration from default group before the migration from the test group
         try await self.testMigrations(groups: [.default, .test]) { migrations in
             await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1, group: .default))
-            await migrations.revert(TestMigration(name: "test1_2", order: order, revertOrder: 4, group: .default))
+            await migrations.register(TestMigration(name: "test1_2", order: order, revertOrder: 4, group: .default))
             await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2, group: .test))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default, .test], logger: self.logger, dryRun: false)
@@ -323,7 +323,7 @@ final class MigrationTests: XCTestCase {
             XCTAssertEqual(migrations[1], "test2")
         }
         try await self.testMigrations(groups: [.default, .test]) { migrations in
-            await migrations.revert(TestMigration(name: "test2", order: order, applyOrder: 2, revertOrder: 4, group: .test))
+            await migrations.register(TestMigration(name: "test2", order: order, applyOrder: 2, revertOrder: 4, group: .test))
         } verify: { _, _ in
         }
         order.expect(5)

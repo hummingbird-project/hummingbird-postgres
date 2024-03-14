@@ -40,9 +40,11 @@ public actor PostgresMigrations {
         self.migrations.append(migration)
     }
 
-    /// Add migration to list of reverts, that can be applied
-    /// - Parameter migration: Migration to be reverted if necessary
-    public func revert(_ migration: PostgresMigration) {
+    /// Register migration without it being applied
+    /// 
+    /// This is useful for migrations you might have to revert.
+    /// - Parameter migration: Migration to be registerd
+    public func register(_ migration: PostgresMigration) {
         self.reverts[migration.name] = migration
     }
 
@@ -68,7 +70,7 @@ public actor PostgresMigrations {
         try await self.migrate(client: client, migrations: self.migrations, groups: groups, logger: logger, completeMigrations: true, dryRun: dryRun)
     }
 
-    /// Revery database migrations
+    /// Revert database migrations
     /// - Parameters:
     ///   - client: Postgres client
     ///   - logger: Logger to use
