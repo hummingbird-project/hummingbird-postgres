@@ -16,7 +16,7 @@ import AsyncAlgorithms
 import Foundation
 import Hummingbird
 import NIOCore
-@_spi(ConnectionPool) import PostgresNIO
+import PostgresNIO
 
 extension PSQLError {
     public var serverError: PostgresError.Code? {
@@ -56,7 +56,7 @@ public final class PostgresPersistDriver: PersistDriver {
     /// - Parameters:
     ///   - client: Postgres client
     ///   - tidyUpFrequequency: How frequently cleanup expired database entries should occur
-    @_spi(ConnectionPool)
+
     public init(client: PostgresClient, migrations: PostgresMigrations, tidyUpFrequency: Duration = .seconds(600), logger: Logger) async {
         self.client = client
         self.logger = logger
@@ -68,18 +68,16 @@ public final class PostgresPersistDriver: PersistDriver {
     /// Create new key. This doesn't check for the existence of this key already so may fail if the key already exists
     public func create(key: String, value: some Codable, expires: Duration?) async throws {
         let expires = expires.map { Date.now + Double($0.components.seconds) } ?? Date.distantFuture
-        try await self.client.withConnection { connection in
-            do {
-                try await connection.query(
-                    "INSERT INTO _hb_pg_persist (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(expires))",
-                    logger: self.logger
-                )
-            } catch let error as PSQLError {
-                if error.serverError == .uniqueViolation {
-                    throw PersistError.duplicate
-                } else {
-                    throw error
-                }
+        do {
+            try await self.client.query(
+                "INSERT INTO _hb_pg_persist (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(expires))",
+                logger: self.logger
+            )
+        } catch let error as PSQLError {
+            if error.serverError == .uniqueViolation {
+                throw PersistError.duplicate
+            } else {
+                throw error
             }
         }
     }
@@ -87,53 +85,45 @@ public final class PostgresPersistDriver: PersistDriver {
     /// Set value for key.
     public func set(key: String, value: some Codable, expires: Duration?) async throws {
         let expires = expires.map { Date.now + Double($0.components.seconds) } ?? Date.distantFuture
-        _ = try await self.client.withConnection { connection in
-            try await connection.query(
-                """
-                INSERT INTO _hb_pg_persist (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(expires))
-                ON CONFLICT (id)
-                DO UPDATE SET data = \(WrapperObject(value)), expires = \(expires)
-                """,
-                logger: self.logger
-            )
-        }
+        try await self.client.query(
+            """
+            INSERT INTO _hb_pg_persist (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(expires))
+            ON CONFLICT (id)
+            DO UPDATE SET data = \(WrapperObject(value)), expires = \(expires)
+            """,
+            logger: self.logger
+        )
     }
 
     /// Get value for key
     public func get<Object: Codable>(key: String, as object: Object.Type) async throws -> Object? {
-        try await self.client.withConnection { connection in
-            let stream = try await connection.query(
-                "SELECT data, expires FROM _hb_pg_persist WHERE id = \(key)",
-                logger: self.logger
-            )
-            guard let result = try await stream.decode((WrapperObject<Object>, Date).self)
-                .first(where: { _ in true })
-            else {
-                return nil
-            }
-            guard result.1 > .now else { return nil }
-            return result.0.value
+        let stream = try await self.client.query(
+            "SELECT data, expires FROM _hb_pg_persist WHERE id = \(key)",
+            logger: self.logger
+        )
+        guard let (object, expires) = try await stream.decode((WrapperObject<Object>, Date).self)
+            .first(where: { _ in true })
+        else {
+            return nil
         }
+        guard expires > .now else { return nil }
+        return object.value
     }
 
     /// Remove key
     public func remove(key: String) async throws {
-        _ = try await self.client.withConnection { connection in
-            try await connection.query(
-                "DELETE FROM _hb_pg_persist WHERE id = \(key)",
-                logger: self.logger
-            )
-        }
+        try await self.client.query(
+            "DELETE FROM _hb_pg_persist WHERE id = \(key)",
+            logger: self.logger
+        )
     }
 
     /// tidy up database by cleaning out expired keys
     func tidy() async throws {
-        _ = try await self.client.withConnection { connection in
-            try await connection.query(
-                "DELETE FROM _hb_pg_persist WHERE expires < \(Date.now)",
-                logger: self.logger
-            )
-        }
+        try await self.client.query(
+            "DELETE FROM _hb_pg_persist WHERE expires < \(Date.now)",
+            logger: self.logger
+        )
     }
 }
 

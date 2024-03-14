@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Logging
-@_spi(ConnectionPool) import PostgresNIO
+import PostgresNIO
 
 struct CreatePersistTable: PostgresMigration {
     func apply(connection: PostgresConnection, logger: Logger) async throws {

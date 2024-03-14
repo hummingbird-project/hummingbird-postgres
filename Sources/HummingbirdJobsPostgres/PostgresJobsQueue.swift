@@ -14,13 +14,12 @@
 
 import Foundation
 import HummingbirdJobs
-@_spi(ConnectionPool) import HummingbirdPostgres
+import HummingbirdPostgres
 import Logging
 import NIOConcurrencyHelpers
 import NIOCore
-@_spi(ConnectionPool) import PostgresNIO
+import PostgresNIO
 
-@_spi(ConnectionPool)
 public final class PostgresQueue: JobQueueDriver {
     public typealias JobID = UUID
 
@@ -121,16 +120,12 @@ public final class PostgresQueue: JobQueueDriver {
 
     /// This is called to say job has finished processing and it can be deleted
     public func finished(jobId: JobID) async throws {
-        _ = try await self.client.withConnection { connection in
-            try await self.delete(jobId: jobId, connection: connection)
-        }
+        try await self.delete(jobId: jobId)
     }
 
     /// This is called to say job has failed to run and should be put aside
     public func failed(jobId: JobID, error: Error) async throws {
-        _ = try await self.client.withConnection { connection in
-            try await self.setStatus(jobId: jobId, status: .failed, connection: connection)
-        }
+        try await self.setStatus(jobId: jobId, status: .failed)
     }
 
     /// stop serving jobs
@@ -199,8 +194,8 @@ public final class PostgresQueue: JobQueueDriver {
         )
     }
 
-    func delete(jobId: JobID, connection: PostgresConnection) async throws {
-        try await connection.query(
+    func delete(jobId: JobID) async throws {
+        try await self.client.query(
             "DELETE FROM _hb_pg_jobs WHERE id = \(jobId)",
             logger: self.logger
         )
@@ -222,18 +217,23 @@ public final class PostgresQueue: JobQueueDriver {
         )
     }
 
+    func setStatus(jobId: JobID, status: Status) async throws {
+        try await self.client.query(
+            "UPDATE _hb_pg_jobs SET status = \(status), lastModified = \(Date.now) WHERE id = \(jobId)",
+            logger: self.logger
+        )
+    }
+
     func getJobs(withStatus status: Status) async throws -> [JobID] {
-        return try await self.client.withConnection { connection in
-            let stream = try await connection.query(
-                "SELECT id FROM _hb_pg_jobs WHERE status = \(status)",
-                logger: self.logger
-            )
-            var jobs: [JobID] = []
-            for try await id in stream.decode(JobID.self, context: .default) {
-                jobs.append(id)
-            }
-            return jobs
+        let stream = try await self.client.query(
+            "SELECT id FROM _hb_pg_jobs WHERE status = \(status)",
+            logger: self.logger
+        )
+        var jobs: [JobID] = []
+        for try await id in stream.decode(JobID.self, context: .default) {
+            jobs.append(id)
         }
+        return jobs
     }
 
     func updateJobsOnInit(withStatus status: Status, onInit: JobInitialization, connection: PostgresConnection) async throws {
@@ -280,7 +280,6 @@ extension PostgresQueue {
     }
 }
 
-@_spi(ConnectionPool)
 extension JobQueueDriver where Self == PostgresQueue {
     /// Return Postgres driver for Job Queue
     /// - Parameters:

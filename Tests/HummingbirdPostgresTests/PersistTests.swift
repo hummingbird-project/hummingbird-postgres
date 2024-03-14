@@ -13,10 +13,10 @@
 //===----------------------------------------------------------------------===//
 
 import Hummingbird
-@_spi(ConnectionPool) import HummingbirdPostgres
+import HummingbirdPostgres
 import HummingbirdTesting
 import Logging
-@_spi(ConnectionPool) import PostgresNIO
+import PostgresNIO
 import ServiceLifecycle
 import XCTest
 

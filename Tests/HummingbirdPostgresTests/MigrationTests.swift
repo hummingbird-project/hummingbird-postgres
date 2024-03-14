@@ -1,7 +1,7 @@
 import Atomics
-@testable @_spi(ConnectionPool) import HummingbirdPostgres
+@testable import HummingbirdPostgres
 import Logging
-@_spi(ConnectionPool) import PostgresNIO
+import PostgresNIO
 import XCTest
 
 final class MigrationTests: XCTestCase {

@@ -14,7 +14,7 @@
 
 import HummingbirdPostgres
 import Logging
-@_spi(ConnectionPool) import PostgresNIO
+import PostgresNIO
 
 struct CreateJobQueue: PostgresMigration {
     func apply(connection: PostgresConnection, logger: Logger) async throws {

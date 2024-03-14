@@ -15,11 +15,11 @@
 import Atomics
 import Hummingbird
 import HummingbirdJobs
-@testable @_spi(ConnectionPool) import HummingbirdPostgres
-@testable @_spi(ConnectionPool) import HummingbirdJobsPostgres
+@testable import HummingbirdJobsPostgres
+@testable import HummingbirdPostgres
 import HummingbirdTesting
 import NIOConcurrencyHelpers
-@_spi(ConnectionPool) import PostgresNIO
+import PostgresNIO
 import ServiceLifecycle
 import XCTest
 
