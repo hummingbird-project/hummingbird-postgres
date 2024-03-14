@@ -222,21 +222,21 @@ struct PostgresMigrationRepository {
 
     func add(_ migration: PostgresMigration, context: Context) async throws {
         try await context.connection.query(
-            "INSERT INTO _hb_migrations (\"name\", \"group\") VALUES (\(migration.name), \(migration.group.name))",
+            "INSERT INTO _hb_pg_migrations (\"name\", \"group\") VALUES (\(migration.name), \(migration.group.name))",
             logger: context.logger
         )
     }
 
     func remove(_ migration: PostgresMigration, context: Context) async throws {
         try await context.connection.query(
-            "DELETE FROM _hb_migrations WHERE name = \(migration.name)",
+            "DELETE FROM _hb_pg_migrations WHERE name = \(migration.name)",
             logger: context.logger
         )
     }
 
     func getAll(context: Context) async throws -> [(name: String, group: MigrationGroup)] {
         let stream = try await context.connection.query(
-            "SELECT \"name\", \"group\" FROM _hb_migrations ORDER BY \"order\"",
+            "SELECT \"name\", \"group\" FROM _hb_pg_migrations ORDER BY \"order\"",
             logger: context.logger
         )
         var result: [(String, MigrationGroup)] = []
@@ -249,7 +249,7 @@ struct PostgresMigrationRepository {
     private func createMigrationsTable(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
             """
-            CREATE TABLE IF NOT EXISTS _hb_migrations (
+            CREATE TABLE IF NOT EXISTS _hb_pg_migrations (
                 "order" SERIAL PRIMARY KEY,
                 "name" text, 
                 "group" text
