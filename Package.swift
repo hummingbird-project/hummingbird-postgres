@@ -8,6 +8,7 @@ let package = Package(
     platforms: [.macOS(.v14), .iOS(.v17), .tvOS(.v17)],
     products: [
         .library(name: "HummingbirdPostgres", targets: ["HummingbirdPostgres"]),
+        .library(name: "HummingbirdJobsPostgres", targets: ["HummingbirdJobsPostgres"]),
     ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0-beta.1"),

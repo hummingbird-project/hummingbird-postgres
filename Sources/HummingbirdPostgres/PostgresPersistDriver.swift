@@ -27,7 +27,7 @@ extension PSQLError {
     }
 }
 
-/// Fluent driver for persist system for storing persistent cross request key/value pairs
+/// Postgres driver for persist system for storing persistent cross request key/value pairs
 public final class PostgresPersistDriver: PersistDriver {
     struct WrapperObject<Value: Codable>: PostgresCodable, Codable {
         let value: Value
@@ -52,11 +52,12 @@ public final class PostgresPersistDriver: PersistDriver {
     let tidyUpFrequency: Duration
     let migrations: PostgresMigrations
 
-    /// Initialize FluentPersistDriver
+    /// Initialize PostgresPersistDriver
     /// - Parameters:
     ///   - client: Postgres client
+    ///   - migrations: Migrations array to add persist migrations
     ///   - tidyUpFrequequency: How frequently cleanup expired database entries should occur
-
+    ///   - logger: Logger used by persist
     public init(client: PostgresClient, migrations: PostgresMigrations, tidyUpFrequency: Duration = .seconds(600), logger: Logger) async {
         self.client = client
         self.logger = logger

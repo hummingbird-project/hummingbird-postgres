@@ -49,7 +49,7 @@ extension PostgresMigration {
 ///     public static var `myGroup`: Self { .init("myGroup") }
 /// }
 /// ```
-/// After that set ``PostgresMigration.group`` to `.myGroup`.
+/// After that set `PostgresMigration.group` to `.myGroup`.
 ///
 /// Only use a group different from `.default` if you are certain that the database elements you are
 /// creating within that group will always be independent of everything else in the database. Groups
