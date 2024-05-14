@@ -77,7 +77,7 @@ final class JobsTests: XCTestCase {
             return try await withThrowingTaskGroup(of: Void.self) { group in
                 let serviceGroup = ServiceGroup(
                     configuration: .init(
-                        services: [PostgresClientService(client: jobQueue.queue.client), jobQueue],
+                        services: [jobQueue.queue.client, jobQueue],
                         gracefulShutdownSignals: [.sigterm, .sigint],
                         logger: jobQueue.queue.logger
                     )
@@ -352,7 +352,7 @@ final class JobsTests: XCTestCase {
         try await withThrowingTaskGroup(of: Void.self) { group in
             let serviceGroup = ServiceGroup(
                 configuration: .init(
-                    services: [PostgresClientService(client: postgresClient), jobQueue, jobQueue2],
+                    services: [postgresClient, jobQueue, jobQueue2],
                     gracefulShutdownSignals: [.sigterm, .sigint],
                     logger: logger
                 )

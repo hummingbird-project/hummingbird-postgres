@@ -2,17 +2,6 @@ import Hummingbird
 import PostgresNIO
 import ServiceLifecycle
 
-/// Manage the lifecycle of a PostgresClient
-struct PostgresClientService: Service {
-    let client: PostgresClient
-
-    func run() async {
-        await cancelOnGracefulShutdown {
-            await self.client.run()
-        }
-    }
-}
-
 func getPostgresConfiguration() async throws -> PostgresClient.Configuration {
     let env = try await Environment.shared.merging(with: .dotEnv())
     return .init(
