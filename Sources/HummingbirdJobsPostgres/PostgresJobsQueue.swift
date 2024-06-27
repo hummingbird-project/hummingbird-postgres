@@ -281,6 +281,8 @@ public final class PostgresQueue: JobQueueDriver {
 /// extend PostgresJobQueue to conform to AsyncSequence
 extension PostgresQueue {
     public struct AsyncIterator: AsyncIteratorProtocol {
+        public typealias Element = QueuedJob<JobID>
+
         let queue: PostgresQueue
 
         public func next() async throws -> Element? {
