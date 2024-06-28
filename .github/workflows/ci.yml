@@ -4,74 +4,22 @@ on:
   push:
     branches:
     - main
-    - 2.x.x
     paths:
     - '**.swift'
     - '**.yml'
   pull_request:
-    branches:
-    - main
-    - 2.x.x
   workflow_dispatch:
 
 jobs:
-#  macOS:
-#    runs-on: macOS-13
-#    steps:
-#    - name: Checkout
-#      uses: actions/checkout@v4
-#    - name: SPM tests
-#      run: swift test --enable-code-coverage
-#    - name: Convert coverage files
-#      run: |
-#        xcrun llvm-cov export -format "lcov" \
-#          .build/debug/hummingbirdPackageTests.xctest/Contents/MacOs/hummingbirdPackageTests \
-#          -ignore-filename-regex="\/Tests\/" \
-#          -ignore-filename-regex="\/Benchmarks\/" \
-#          -instr-profile=.build/debug/codecov/default.profdata > info.lcov
-#    - name: Upload to codecov.io
-#      uses: codecov/codecov-action@v3
-#      with:
-#        file: info.lcov
   linux:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       matrix:
-        image:
-          - 'swift:5.9'
-          - 'swift:5.10'
-        postgres-image:
-          - 'postgres:16'
-          - 'postgres:14'
-          - 'postgres:12'
-        include:
-          - postgres-image: postgres:16
-            postgres-auth: scram-sha-256
-          - postgres-image: postgres:14
-            postgres-auth: md5
-          - postgres-image: postgres:12
-            postgres-auth: trust
+        image: ["swift:5.9", "swift:5.10", "swiftlang/swift:nightly-6.0-jammy"]
+    
     container:
       image: ${{ matrix.image }}
-      volumes: [ 'pgrunshare:/var/run/postgresql' ]
-    env:
-      POSTGRES_DB: 'test_database'
-      POSTGRES_USER: 'test_user'
-      POSTGRES_PASSWORD: 'test_password'
-      POSTGRES_HOSTNAME: 'psql'
-      POSTGRES_SOCKET: '/var/run/postgresql/.s.PGSQL.5432'
-      POSTGRES_HOST_AUTH_METHOD: ${{ matrix.postgres-auth }}
-    services:
-      psql:
-        image: ${{ matrix.postgres-image }}
-        volumes: [ 'pgrunshare:/var/run/postgresql' ]
-        env:
-          POSTGRES_DB: 'test_database'
-          POSTGRES_USER: 'test_user'
-          POSTGRES_PASSWORD: 'test_password'
-          POSTGRES_HOST_AUTH_METHOD: ${{ matrix.postgres-auth }}
-          POSTGRES_INITDB_ARGS: --auth-host=${{ matrix.postgres-auth }}
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -86,6 +34,6 @@ jobs:
           -ignore-filename-regex="\/Benchmarks\/" \
           -instr-profile .build/debug/codecov/default.profdata > info.lcov
     - name: Upload to codecov.io
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: info.lcov
