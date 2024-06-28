@@ -22,7 +22,7 @@ import XCTest
 
 final class PersistTests: XCTestCase {
     func createApplication(_ updateRouter: (Router<BasicRequestContext>, PersistDriver) -> Void = { _, _ in }) async throws -> some ApplicationProtocol {
-        struct PostgresErrorMiddleware<Context: BaseRequestContext>: RouterMiddleware {
+        struct PostgresErrorMiddleware<Context: RequestContext>: RouterMiddleware {
             func handle(_ request: Request, context: Context, next: (Request, Context) async throws -> Response) async throws -> Response {
                 do {
                     return try await next(request, context)

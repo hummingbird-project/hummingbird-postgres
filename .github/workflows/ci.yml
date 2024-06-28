@@ -40,7 +40,7 @@ jobs:
       matrix:
         image:
           - 'swift:5.9'
-          - 'swiftlang/swift:nightly-5.10-jammy'
+          - 'swift:5.10'
         postgres-image:
           - 'postgres:16'
           - 'postgres:14'
