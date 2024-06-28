@@ -41,7 +41,7 @@ public actor PostgresMigrations {
     }
 
     /// Register migration without it being applied
-    /// 
+    ///
     /// This is useful for migrations you might have to revert.
     /// - Parameter migration: Migration to be registerd
     public func register(_ migration: PostgresMigration) {
