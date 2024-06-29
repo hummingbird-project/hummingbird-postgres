@@ -11,7 +11,8 @@ let package = Package(
         .library(name: "HummingbirdJobsPostgres", targets: ["HummingbirdJobsPostgres"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0-beta.7"),
+        .package(url: "https://github.com/hummingbird-project/hummingbird.git", branch: "main"),
+        .package(url: "https://github.com/hummingbird-project/hummingbird-jobs.git", branch: "main"),
         .package(url: "https://github.com/vapor/postgres-nio", from: "1.21.0"),
     ],
     targets: [
@@ -26,7 +27,7 @@ let package = Package(
             name: "HummingbirdJobsPostgres",
             dependencies: [
                 "HummingbirdPostgres",
-                .product(name: "HummingbirdJobs", package: "hummingbird"),
+                .product(name: "HummingbirdJobs", package: "hummingbird-jobs"),
                 .product(name: "PostgresNIO", package: "postgres-nio"),
             ]
         ),
