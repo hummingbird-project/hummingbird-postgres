@@ -3,7 +3,7 @@ import PostgresNIO
 import ServiceLifecycle
 
 func getPostgresConfiguration() async throws -> PostgresClient.Configuration {
-    let env = try await Environment.shared.merging(with: .dotEnv())
+    let env = try await Environment().merging(with: .dotEnv())
     return .init(
         host: env.get("POSTGRES_HOSTNAME") ?? "localhost",
         port: env.get("POSTGRES_PORT", as: Int.self) ?? 5432,

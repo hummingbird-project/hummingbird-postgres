@@ -72,7 +72,7 @@ final class PersistTests: XCTestCase {
         updateRouter(router, persist)
         var app = Application(responder: router.buildResponder())
         app.addServices(postgresClient, persist)
-        app.runBeforeServerStart {
+        app.beforeServerStarts {
             try await postgresMigrations.apply(client: postgresClient, groups: [.persist], logger: logger, dryRun: false)
         }
 
