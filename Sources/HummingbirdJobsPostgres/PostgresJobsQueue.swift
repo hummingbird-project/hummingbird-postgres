@@ -38,7 +38,7 @@ import PostgresNIO
 ///    logger: logger
 /// )
 /// var app = Application(...)
-/// app.runBeforeServerStart {
+/// app.beforeServerStarts {
 ///     try await migrations.apply(client: postgresClient, logger: logger, dryRun: applyMigrations)
 /// }
 /// ```
