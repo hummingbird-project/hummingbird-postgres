@@ -13,8 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-import HummingbirdJobs
 import HummingbirdPostgres
+import Jobs
 import Logging
 import NIOConcurrencyHelpers
 import NIOCore
@@ -42,7 +42,7 @@ import PostgresNIO
 ///     try await migrations.apply(client: postgresClient, logger: logger, dryRun: applyMigrations)
 /// }
 /// ```
-public final class PostgresQueue: JobQueueDriver {
+public final class PostgresJobQueue: JobQueueDriver {
     public typealias JobID = UUID
 
     /// what to do with failed/processing jobs from last time queue was handled
@@ -279,11 +279,11 @@ public final class PostgresQueue: JobQueueDriver {
 }
 
 /// extend PostgresJobQueue to conform to AsyncSequence
-extension PostgresQueue {
+extension PostgresJobQueue {
     public struct AsyncIterator: AsyncIteratorProtocol {
         public typealias Element = QueuedJob<JobID>
 
-        let queue: PostgresQueue
+        let queue: PostgresJobQueue
 
         public func next() async throws -> Element? {
             while true {
@@ -304,13 +304,13 @@ extension PostgresQueue {
     }
 }
 
-extension JobQueueDriver where Self == PostgresQueue {
+extension JobQueueDriver where Self == PostgresJobQueue {
     /// Return Postgres driver for Job Queue
     /// - Parameters:
     ///   - client: Postgres client
     ///   - configuration: Queue configuration
     ///   - logger: Logger used by queue
-    public static func postgres(client: PostgresClient, migrations: PostgresMigrations, configuration: PostgresQueue.Configuration = .init(), logger: Logger) async -> Self {
+    public static func postgres(client: PostgresClient, migrations: PostgresMigrations, configuration: PostgresJobQueue.Configuration = .init(), logger: Logger) async -> Self {
         await Self(client: client, migrations: migrations, configuration: configuration, logger: logger)
     }
 }

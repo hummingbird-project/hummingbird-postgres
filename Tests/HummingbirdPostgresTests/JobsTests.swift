@@ -14,10 +14,10 @@
 
 import Atomics
 import Hummingbird
-import HummingbirdJobs
 @testable import HummingbirdJobsPostgres
 @testable import HummingbirdPostgres
 import HummingbirdTesting
+import Jobs
 import NIOConcurrencyHelpers
 import PostgresNIO
 import ServiceLifecycle
@@ -41,7 +41,7 @@ final class JobsTests: XCTestCase {
 
     static let env = Environment()
 
-    func createJobQueue(numWorkers: Int, configuration: PostgresQueue.Configuration, function: String = #function) async throws -> JobQueue<PostgresQueue> {
+    func createJobQueue(numWorkers: Int, configuration: PostgresJobQueue.Configuration, function: String = #function) async throws -> JobQueue<PostgresJobQueue> {
         let logger = {
             var logger = Logger(label: function)
             logger.logLevel = .debug
@@ -53,7 +53,7 @@ final class JobsTests: XCTestCase {
         )
         let postgresMigrations = PostgresMigrations()
         return await JobQueue(
-            PostgresQueue(
+            .postgres(
                 client: postgresClient,
                 migrations: postgresMigrations,
                 configuration: configuration,
@@ -69,9 +69,9 @@ final class JobsTests: XCTestCase {
     /// Creates test client, runs test function abd ensures everything is
     /// shutdown correctly
     @discardableResult public func testJobQueue<T>(
-        jobQueue: JobQueue<PostgresQueue>,
+        jobQueue: JobQueue<PostgresJobQueue>,
         revertMigrations: Bool = false,
-        test: (JobQueue<PostgresQueue>) async throws -> T
+        test: (JobQueue<PostgresJobQueue>) async throws -> T
     ) async throws -> T {
         do {
             return try await withThrowingTaskGroup(of: Void.self) { group in
@@ -117,10 +117,10 @@ final class JobsTests: XCTestCase {
     /// shutdown correctly
     @discardableResult public func testJobQueue<T>(
         numWorkers: Int,
-        configuration: PostgresQueue.Configuration = .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
+        configuration: PostgresJobQueue.Configuration = .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
         revertMigrations: Bool = true,
         function: String = #function,
-        test: (JobQueue<PostgresQueue>) async throws -> T
+        test: (JobQueue<PostgresJobQueue>) async throws -> T
     ) async throws -> T {
         let jobQueue = try await self.createJobQueue(numWorkers: numWorkers, configuration: configuration, function: function)
         return try await self.testJobQueue(jobQueue: jobQueue, revertMigrations: revertMigrations, test: test)
@@ -337,7 +337,7 @@ final class JobsTests: XCTestCase {
         )
         let postgresMigrations2 = PostgresMigrations()
         let jobQueue2 = await JobQueue(
-            PostgresQueue(
+            .postgres(
                 client: postgresClient,
                 migrations: postgresMigrations2,
                 configuration: .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
