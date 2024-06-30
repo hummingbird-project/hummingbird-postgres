@@ -14,10 +14,10 @@
 
 import Atomics
 import Hummingbird
-@testable import HummingbirdJobsPostgres
 @testable import HummingbirdPostgres
 import HummingbirdTesting
 import Jobs
+@testable import JobsPostgres
 import NIOConcurrencyHelpers
 import PostgresNIO
 import ServiceLifecycle
