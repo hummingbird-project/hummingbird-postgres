@@ -22,7 +22,7 @@ struct CreateJobQueue: PostgresMigration {
             """
             CREATE TABLE IF NOT EXISTS _hb_pg_job_queue (
                 job_id uuid PRIMARY KEY,
-                createdAt timestamp with time zone
+                created_at timestamp with time zone
             )
             """,
             logger: logger
@@ -30,7 +30,7 @@ struct CreateJobQueue: PostgresMigration {
         try await connection.query(
             """
             CREATE INDEX IF NOT EXISTS _hb_job_queueidx 
-            ON _hb_pg_job_queue (createdAt ASC)
+            ON _hb_pg_job_queue(created_at ASC)
             """,
             logger: logger
         )

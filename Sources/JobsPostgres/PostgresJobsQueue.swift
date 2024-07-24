@@ -134,8 +134,10 @@ public final class PostgresJobQueue: JobQueueDriver {
     @discardableResult public func push(_ buffer: ByteBuffer) async throws -> JobID {
         try await self.client.withConnection { connection in
             let queuedJob = QueuedJob<JobID>(id: .init(), jobBuffer: buffer)
-            try await add(queuedJob, connection: connection)
-            try await addToQueue(jobId: queuedJob.id, connection: connection)
+            try await self.startTransaction(connection: connection)
+            try await self.add(queuedJob, connection: connection)
+            try await self.addToQueue(jobId: queuedJob.id, connection: connection)
+            try await self.commitTransaction(connection: connection)
             return queuedJob.id
         }
     }
@@ -163,6 +165,7 @@ public final class PostgresJobQueue: JobQueueDriver {
             return try await self.client.withConnection { connection -> QueuedJob? in
                 while true {
                     try Task.checkCancellation()
+                    try await self.startTransaction(connection: connection)
                     let stream = try await connection.query(
                         """
                         DELETE
@@ -170,7 +173,7 @@ public final class PostgresJobQueue: JobQueueDriver {
                         WHERE pse.job_id =
                             (SELECT pse_inner.job_id
                             FROM _hb_pg_job_queue pse_inner
-                            ORDER BY pse_inner.createdAt ASC
+                            ORDER BY pse_inner.created_at ASC
                                 FOR UPDATE SKIP LOCKED
                             LIMIT 1)
                         RETURNING pse.job_id
@@ -179,11 +182,12 @@ public final class PostgresJobQueue: JobQueueDriver {
                     )
                     // return nil if nothing in queue
                     guard let jobId = try await stream.decode(UUID.self, context: .default).first(where: { _ in true }) else {
+                        try await self.commitTransaction(connection: connection)
                         return nil
                     }
                     // select job from job table
                     let stream2 = try await connection.query(
-                        "SELECT job FROM _hb_pg_jobs WHERE id = \(jobId)",
+                        "SELECT job FROM _hb_pg_jobs WHERE id = \(jobId) FOR UPDATE SKIP LOCKED",
                         logger: self.logger
                     )
 
@@ -193,9 +197,11 @@ public final class PostgresJobQueue: JobQueueDriver {
                         guard let buffer = try await stream2.decode(ByteBuffer.self, context: .default).first(where: { _ in true }) else {
                             continue
                         }
+                        try await self.commitTransaction(connection: connection)
                         return QueuedJob(id: jobId, jobBuffer: buffer)
                     } catch {
                         try await self.setStatus(jobId: jobId, status: .failed, connection: connection)
+                        try await self.rollbackTransaction(connection: connection)
                         throw JobQueueError.decodeJobFailed
                     }
                 }
@@ -226,7 +232,7 @@ public final class PostgresJobQueue: JobQueueDriver {
     func addToQueue(jobId: JobID, connection: PostgresConnection) async throws {
         try await connection.query(
             """
-            INSERT INTO _hb_pg_job_queue (job_id, createdAt) VALUES (\(jobId), \(Date.now))
+            INSERT INTO _hb_pg_job_queue (job_id, created_at) VALUES (\(jobId), \(Date.now))
             """,
             logger: self.logger
         )
@@ -234,21 +240,21 @@ public final class PostgresJobQueue: JobQueueDriver {
 
     func setStatus(jobId: JobID, status: Status, connection: PostgresConnection) async throws {
         try await connection.query(
-            "UPDATE _hb_pg_jobs SET status = \(status), lastModified = \(Date.now) WHERE id = \(jobId)",
+            "UPDATE _hb_pg_jobs SET status = \(status), last_modified = \(Date.now) WHERE id = \(jobId)",
             logger: self.logger
         )
     }
 
     func setStatus(jobId: JobID, status: Status) async throws {
         try await self.client.query(
-            "UPDATE _hb_pg_jobs SET status = \(status), lastModified = \(Date.now) WHERE id = \(jobId)",
+            "UPDATE _hb_pg_jobs SET status = \(status), last_modified = \(Date.now) WHERE id = \(jobId)",
             logger: self.logger
         )
     }
 
     func getJobs(withStatus status: Status) async throws -> [JobID] {
         let stream = try await self.client.query(
-            "SELECT id FROM _hb_pg_jobs WHERE status = \(status)",
+            "SELECT id FROM _hb_pg_jobs WHERE status = \(status) FOR UPDATE SKIP LOCKED",
             logger: self.logger
         )
         var jobs: [JobID] = []
@@ -262,16 +268,18 @@ public final class PostgresJobQueue: JobQueueDriver {
         switch onInit {
         case .remove:
             try await connection.query(
-                "DELETE FROM _hb_pg_jobs WHERE status = \(status)",
+                "DELETE FROM _hb_pg_jobs WHERE status = \(status) ",
                 logger: self.logger
             )
         case .rerun:
             guard status != .pending else { return }
+            try await self.startTransaction(connection: connection)
             let jobs = try await getJobs(withStatus: status)
             self.logger.info("Moving \(jobs.count) jobs with status: \(status) to job queue")
             for jobId in jobs {
                 try await self.addToQueue(jobId: jobId, connection: connection)
             }
+            try await self.commitTransaction(connection: connection)
         case .doNothing:
             break
         }
@@ -301,6 +309,18 @@ extension PostgresJobQueue {
 
     public func makeAsyncIterator() -> AsyncIterator {
         return .init(queue: self)
+    }
+
+    private func startTransaction(connection: PostgresConnection) async throws {
+        try await connection.query("BEGIN;", logger: self.logger)
+    }
+
+    private func commitTransaction(connection: PostgresConnection) async throws {
+        try await connection.query("COMMIT;", logger: self.logger)
+    }
+
+    private func rollbackTransaction(connection: PostgresConnection) async throws {
+        try await connection.query("ROLLBACK;", logger: self.logger)
     }
 }
 

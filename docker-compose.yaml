@@ -1,0 +1,16 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - 5434:5432
+    volumes:
+      - db:/var/lib/postgresql/hummingbird
+    environment:
+      - POSTGRES_PASSWORD=hummingbird
+      - POSTGRES_USER=hummingbird
+      - POSTGRES_DB=hummingbird
+volumes:
+  db:
+    driver: local

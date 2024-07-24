@@ -24,8 +24,16 @@ struct CreateJobs: PostgresMigration {
                 id uuid PRIMARY KEY,
                 job bytea,
                 status smallint,
-                lastModified TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                last_modified TIMESTAMPTZ DEFAULT NOW()
             )     
+            """,
+            logger: logger
+        )
+        
+        try await connection.query(
+            """
+            CREATE INDEX IF NOT EXISTS _hb_job_status
+            ON _hb_pg_jobs(status)
             """,
             logger: logger
         )
