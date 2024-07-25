@@ -29,7 +29,6 @@ struct CreateJobs: PostgresMigration {
             """,
             logger: logger
         )
-
         try await connection.query(
             """
             CREATE INDEX IF NOT EXISTS _hb_job_status
