@@ -20,7 +20,7 @@ final class MigrationTests: XCTestCase {
             }
         }
 
-        internal init(
+        init(
             name: String,
             order: Order = Order(),
             applyOrder: Int? = nil,

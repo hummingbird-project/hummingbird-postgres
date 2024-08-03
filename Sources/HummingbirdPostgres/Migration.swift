@@ -18,7 +18,7 @@ import PostgresNIO
 /// Protocol for a database migration
 ///
 /// Requires two functions one to apply the database migration and one to revert it.
-public protocol PostgresMigration {
+public protocol PostgresMigration: Sendable {
     /// Apply database migration
     func apply(connection: PostgresConnection, logger: Logger) async throws
     /// Revert database migration
@@ -54,7 +54,7 @@ extension PostgresMigration {
 /// Only use a group different from `.default` if you are certain that the database elements you are
 /// creating within that group will always be independent of everything else in the database. Groups
 /// are useful for libraries that use migrations to setup their database elements.
-public struct PostgresMigrationGroup: Hashable, Equatable {
+public struct PostgresMigrationGroup: Hashable, Equatable, Sendable {
     let name: String
 
     public init(_ name: String) {
