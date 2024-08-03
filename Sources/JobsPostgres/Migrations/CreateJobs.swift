@@ -24,7 +24,7 @@ struct CreateJobs: PostgresMigration {
                 id uuid PRIMARY KEY,
                 job bytea,
                 status smallint,
-                last_modified TIMESTAMPTZ DEFAULT NOW()
+                lastModified TIMESTAMPTZ DEFAULT NOW()
             )     
             """,
             logger: logger
