@@ -158,9 +158,9 @@ public final class PostgresJobQueue: JobQueueDriver {
     /// shutdown queue once all active jobs have been processed
     public func shutdownGracefully() async {}
 
-    func popFirst() async throws -> QueuedJob<JobID>? {
+    func popFirst() async throws -> Result<QueuedJob<JobID>?, Error> {
         do {
-            return try await self.client.withTransaction(logger: self.logger) { connection -> QueuedJob? in
+            return try await self.client.withTransaction(logger: self.logger) { connection -> Result<QueuedJob<JobID>?, Error> in
                 while true {
                     try Task.checkCancellation()
 
@@ -180,7 +180,7 @@ public final class PostgresJobQueue: JobQueueDriver {
                     )
                     // return nil if nothing in queue
                     guard let jobId = try await stream.decode(UUID.self, context: .default).first(where: { _ in true }) else {
-                        return nil
+                        return Result.success(nil)
                     }
                     // select job from job table
                     let stream2 = try await connection.query(
@@ -194,15 +194,17 @@ public final class PostgresJobQueue: JobQueueDriver {
                         guard let buffer = try await stream2.decode(ByteBuffer.self, context: .default).first(where: { _ in true }) else {
                             continue
                         }
-                        return QueuedJob(id: jobId, jobBuffer: buffer)
+                        return Result.success(QueuedJob(id: jobId, jobBuffer: buffer))
                     } catch {
                         try await self.setStatus(jobId: jobId, status: .failed, connection: connection)
-                        throw JobQueueError.decodeJobFailed
+                        return Result.failure(JobQueueError.decodeJobFailed)
                     }
                 }
             }
         } catch let error as PSQLError {
-            print("\(String(reflecting: error))")
+            logger.error("Failed to get job from queue", metadata: [
+                "error": "\(String(reflecting: error))",
+            ])
             throw error
         }
     }
@@ -266,6 +268,7 @@ public final class PostgresJobQueue: JobQueueDriver {
                 "DELETE FROM _hb_pg_jobs WHERE status = \(status) ",
                 logger: self.logger
             )
+
         case .rerun:
             guard status != .pending else { return }
 
@@ -293,7 +296,8 @@ extension PostgresJobQueue {
                 if self.queue.isStopped.withLockedValue({ $0 }) {
                     return nil
                 }
-                if let job = try await queue.popFirst() {
+                // Should throw if get is failure
+                if let job = try await queue.popFirst().get() {
                     return job
                 }
                 // we only sleep if we didn't receive a job
