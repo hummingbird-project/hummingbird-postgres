@@ -18,7 +18,7 @@ import PostgresNIO
 /// Protocol for a database migration
 ///
 /// Requires two functions one to apply the database migration and one to revert it.
-public protocol PostgresMigration: Sendable {
+public protocol PostgresMigration {
     /// Apply database migration
     func apply(connection: PostgresConnection, logger: Logger) async throws
     /// Revert database migration
