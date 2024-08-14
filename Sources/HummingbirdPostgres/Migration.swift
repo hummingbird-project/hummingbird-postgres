@@ -54,7 +54,7 @@ extension PostgresMigration {
 /// Only use a group different from `.default` if you are certain that the database elements you are
 /// creating within that group will always be independent of everything else in the database. Groups
 /// are useful for libraries that use migrations to setup their database elements.
-public struct PostgresMigrationGroup: Hashable, Equatable {
+public struct PostgresMigrationGroup: Hashable, Equatable, Sendable {
     let name: String
 
     public init(_ name: String) {

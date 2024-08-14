@@ -30,7 +30,7 @@ struct CreateJobQueue: PostgresMigration {
         try await connection.query(
             """
             CREATE INDEX IF NOT EXISTS _hb_job_queueidx 
-            ON _hb_pg_job_queue (createdAt ASC)
+            ON _hb_pg_job_queue(createdAt ASC)
             """,
             logger: logger
         )
