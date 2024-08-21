@@ -25,14 +25,14 @@ struct CreateJobQueuedAt: PostgresMigration {
             logger: logger
         )
     }
-    
+
     func revert(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
             " ALTER TABLE _hb_pg_jobs DROP COLUMN queued_at",
             logger: logger
         )
     }
-    
+
     var name: String { "_Add_QueuedAt_To_Job_Table_" }
     var group: PostgresMigrationGroup { .jobQueue }
 }
