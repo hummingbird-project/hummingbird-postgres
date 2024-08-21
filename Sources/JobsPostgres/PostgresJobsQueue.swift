@@ -110,6 +110,7 @@ public final class PostgresJobQueue: JobQueueDriver {
         self.migrations = migrations
         await migrations.add(CreateJobs())
         await migrations.add(CreateJobQueue())
+        await migrations.add(CreateJobQueuedAt())
     }
 
     /// Run on initialization of the job queue
@@ -218,8 +219,8 @@ public final class PostgresJobQueue: JobQueueDriver {
     func add(_ job: QueuedJob<JobID>, connection: PostgresConnection) async throws {
         try await connection.query(
             """
-            INSERT INTO _hb_pg_jobs (id, job, status)
-            VALUES (\(job.id), \(job.jobBuffer), \(Status.pending))
+            INSERT INTO _hb_pg_jobs (id, job, status, queued_at)
+            VALUES (\(job.id), \(job.jobBuffer), \(Status.pending), \(job.queuedAt))
             """,
             logger: self.logger
         )
