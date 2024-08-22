@@ -20,7 +20,7 @@ struct CreateJobQueuedAt: PostgresMigration {
     func apply(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
             """
-            ALTER TABLE _hb_pg_jobs ADD COLUMN queued_at TIMESTAMP WITH TIME ZONE NOT NULL
+            ALTER TABLE _hb_pg_jobs ADD COLUMN queued_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
             """,
             logger: logger
         )
