@@ -44,6 +44,10 @@ import PostgresNIO
 /// ```
 public final class PostgresJobQueue: JobQueueDriver {
     public typealias JobID = UUID
+    public struct JobData {
+        let id: JobID
+        let queuedAt: Date
+    }
 
     /// what to do with failed/processing jobs from last time queue was handled
     public enum JobInitialization: Sendable {
@@ -175,12 +179,12 @@ public final class PostgresJobQueue: JobQueueDriver {
                             ORDER BY pse_inner.createdAt ASC
                                 FOR UPDATE SKIP LOCKED
                             LIMIT 1)
-                        RETURNING pse.job_id
+                        RETURNING pse.job_id, pse.queued_at
                         """,
                         logger: self.logger
                     )
                     // return nil if nothing in queue
-                    guard let jobId = try await stream.decode(UUID.self, context: .default).first(where: { _ in true }) else {
+                    guard let (jobId, queuedAt) = try await stream.decode((UUID, Date).self, context: .default).first(where: { _ in true }) else {
                         return Result.success(nil)
                     }
                     // select job from job table
@@ -195,7 +199,7 @@ public final class PostgresJobQueue: JobQueueDriver {
                         guard let buffer = try await stream2.decode(ByteBuffer.self, context: .default).first(where: { _ in true }) else {
                             continue
                         }
-                        return Result.success(QueuedJob(id: jobId, jobBuffer: buffer))
+                        return Result.success(QueuedJob(id: jobId, jobBuffer: buffer, queuedAt: queuedAt))
                     } catch {
                         try await self.setStatus(jobId: jobId, status: .failed, connection: connection)
                         return Result.failure(JobQueueError.decodeJobFailed)
@@ -256,14 +260,14 @@ public final class PostgresJobQueue: JobQueueDriver {
         )
     }
 
-    func getJobs(withStatus status: Status) async throws -> [JobID] {
+    func getJobs(withStatus status: Status) async throws -> [JobData] {
         let stream = try await self.client.query(
-            "SELECT id FROM _hb_pg_jobs WHERE status = \(status) FOR UPDATE SKIP LOCKED",
+            "SELECT id, queued_at FROM _hb_pg_jobs WHERE status = \(status) FOR UPDATE SKIP LOCKED",
             logger: self.logger
         )
-        var jobs: [JobID] = []
-        for try await id in stream.decode(JobID.self, context: .default) {
-            jobs.append(id)
+        var jobs: [JobData] = []
+        for try await (id, queuedAt) in stream.decode((JobID, Date).self, context: .default) {
+            jobs.append(JobData(id: id, queuedAt: queuedAt))
         }
         return jobs
     }
@@ -281,8 +285,8 @@ public final class PostgresJobQueue: JobQueueDriver {
 
             let jobs = try await getJobs(withStatus: status)
             self.logger.info("Moving \(jobs.count) jobs with status: \(status) to job queue")
-            for jobId in jobs {
-                try await self.addToQueue(jobId: jobId, queuedAt: Date.now, connection: connection)
+            for job in jobs {
+                try await self.addToQueue(jobId: job.id, queuedAt: job.queuedAt, connection: connection)
             }
 
         case .doNothing:
