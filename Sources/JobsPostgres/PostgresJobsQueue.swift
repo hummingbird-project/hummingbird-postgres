@@ -134,9 +134,9 @@ public final class PostgresJobQueue: JobQueueDriver {
     /// - Returns: Identifier of queued job
     @discardableResult public func push(_ buffer: ByteBuffer) async throws -> JobID {
         try await self.client.withTransaction(logger: self.logger) { connection in
-            let queuedJob = QueuedJob<JobID>(id: .init(), jobBuffer: buffer)
+            let queuedJob = QueuedJob<JobID>(id: .init(), jobBuffer: buffer, queuedAt: Date.now)
             try await self.add(queuedJob, connection: connection)
-            try await self.addToQueue(jobId: queuedJob.id, connection: connection)
+            try await self.addToQueue(jobId: queuedJob.id, queuedAt: queuedJob.queuedAt, connection: connection)
             return queuedJob.id
         }
     }
@@ -233,10 +233,10 @@ public final class PostgresJobQueue: JobQueueDriver {
         )
     }
 
-    func addToQueue(jobId: JobID, connection: PostgresConnection) async throws {
+    func addToQueue(jobId: JobID, queuedAt: Date, connection: PostgresConnection) async throws {
         try await connection.query(
             """
-            INSERT INTO _hb_pg_job_queue (job_id, createdAt) VALUES (\(jobId), \(Date.now))
+            INSERT INTO _hb_pg_job_queue (job_id, createdAt, queued_at) VALUES (\(jobId), \(Date.now), \(queuedAt))
             """,
             logger: self.logger
         )
@@ -282,7 +282,7 @@ public final class PostgresJobQueue: JobQueueDriver {
             let jobs = try await getJobs(withStatus: status)
             self.logger.info("Moving \(jobs.count) jobs with status: \(status) to job queue")
             for jobId in jobs {
-                try await self.addToQueue(jobId: jobId, connection: connection)
+                try await self.addToQueue(jobId: jobId, queuedAt: Date.now, connection: connection)
             }
 
         case .doNothing:
