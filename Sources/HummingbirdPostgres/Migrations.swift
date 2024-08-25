@@ -72,6 +72,7 @@ public actor PostgresMigrations {
         logger: Logger,
         dryRun: Bool
     ) async throws {
+        // wait a small period to ensure the PostgresClient has started up
         try await Task.sleep(for: .microseconds(100))
         try await self.migrate(
             client: client, migrations: self.migrations, groups: groups, logger: logger,
@@ -113,6 +114,7 @@ public actor PostgresMigrations {
         }
         let repository = PostgresMigrationRepository(client: client)
         do {
+            // build map of registered migrations
             let registeredMigrations = {
                 var registeredMigrations = self.reverts
                 for migration in self.migrations {
