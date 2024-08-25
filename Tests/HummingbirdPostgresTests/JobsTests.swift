@@ -375,4 +375,37 @@ final class JobsTests: XCTestCase {
             }
         }
     }
+
+    func testMetadata() async throws {
+        let logger = Logger(label: "testMetadata")
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            let postgresClient = try await PostgresClient(
+                configuration: getPostgresConfiguration(),
+                backgroundLogger: logger
+            )
+            group.addTask {
+                await postgresClient.run()
+            }
+            let postgresMigrations = PostgresMigrations()
+            let jobQueue = await PostgresJobQueue(
+                client: postgresClient,
+                migrations: postgresMigrations,
+                configuration: .init(failedJobsInitialization: .remove, processingJobsInitialization: .remove),
+                logger: logger
+            )
+            try await postgresMigrations.apply(client: postgresClient, groups: [.jobQueue], logger: logger, dryRun: false)
+
+            let value = ByteBuffer(string: "Testing metadata")
+            try await jobQueue.setMetadata(key: "test", value: value)
+            let metadata = try await jobQueue.getMetadata("test")
+            XCTAssertEqual(metadata, value)
+            let value2 = ByteBuffer(string: "Testing metadata again")
+            try await jobQueue.setMetadata(key: "test", value: value2)
+            let metadata2 = try await jobQueue.getMetadata("test")
+            XCTAssertEqual(metadata2, value2)
+
+            // cancel postgres client task
+            group.cancelAll()
+        }
+    }
 }

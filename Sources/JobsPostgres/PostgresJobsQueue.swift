@@ -110,6 +110,7 @@ public final class PostgresJobQueue: JobQueueDriver {
         self.migrations = migrations
         await migrations.add(CreateJobs())
         await migrations.add(CreateJobQueue())
+        await migrations.add(CreateJobQueueMetadata())
     }
 
     /// Run on initialization of the job queue
@@ -157,6 +158,28 @@ public final class PostgresJobQueue: JobQueueDriver {
 
     /// shutdown queue once all active jobs have been processed
     public func shutdownGracefully() async {}
+
+    public func getMetadata(_ key: String) async throws -> ByteBuffer? {
+        let stream = try await self.client.query(
+            "SELECT value FROM _hb_pg_job_queue_metadata WHERE key = \(key)",
+            logger: self.logger
+        )
+        for try await value in stream.decode(ByteBuffer.self) {
+            return value
+        }
+        return nil
+    }
+
+    public func setMetadata(key: String, value: ByteBuffer) async throws {
+        try await self.client.query(
+            """
+            INSERT INTO _hb_pg_job_queue_metadata (key, value) VALUES (\(key), \(value))
+            ON CONFLICT (key)
+            DO UPDATE SET value = \(value)
+            """,
+            logger: self.logger
+        )
+    }
 
     func popFirst() async throws -> QueuedJob<JobID>? {
         do {
