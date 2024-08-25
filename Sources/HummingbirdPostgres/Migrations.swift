@@ -72,6 +72,7 @@ public actor PostgresMigrations {
         logger: Logger,
         dryRun: Bool
     ) async throws {
+        try await Task.sleep(for: .microseconds(100))
         try await self.migrate(
             client: client, migrations: self.migrations, groups: groups, logger: logger,
             completeMigrations: true, dryRun: dryRun
