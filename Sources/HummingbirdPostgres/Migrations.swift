@@ -66,8 +66,16 @@ public actor PostgresMigrations {
     ///   - logger: Logger to use
     ///   - dryRun: Should migrations actually be applied, or should we just report what would be applied and reverted
 
-    public func apply(client: PostgresClient, groups: [PostgresMigrationGroup] = [], logger: Logger, dryRun: Bool) async throws {
-        try await self.migrate(client: client, migrations: self.migrations, groups: groups, logger: logger, completeMigrations: true, dryRun: dryRun)
+    public func apply(
+        client: PostgresClient,
+        groups: [PostgresMigrationGroup] = [],
+        logger: Logger,
+        dryRun: Bool
+    ) async throws {
+        try await self.migrate(
+            client: client, migrations: self.migrations, groups: groups, logger: logger,
+            completeMigrations: true, dryRun: dryRun
+        )
     }
 
     /// Revert database migrations
@@ -76,8 +84,16 @@ public actor PostgresMigrations {
     ///   - logger: Logger to use
     ///   - dryRun: Should migrations actually be reverted, or should we just report what would be reverted
 
-    public func revert(client: PostgresClient, groups: [PostgresMigrationGroup] = [], logger: Logger, dryRun: Bool) async throws {
-        try await self.migrate(client: client, migrations: [], groups: groups, logger: logger, completeMigrations: false, dryRun: dryRun)
+    public func revert(
+        client: PostgresClient,
+        groups: [PostgresMigrationGroup] = [],
+        logger: Logger,
+        dryRun: Bool
+    ) async throws {
+        try await self.migrate(
+            client: client, migrations: [], groups: groups, logger: logger,
+            completeMigrations: false, dryRun: dryRun
+        )
     }
 
     private func migrate(
@@ -96,6 +112,8 @@ public actor PostgresMigrations {
         }
         let repository = PostgresMigrationRepository(client: client)
         do {
+            let registeredReverts = self.reverts
+            let registeredMigrations = self.migrations
             _ = try await repository.withContext(logger: logger) { context in
                 // setup migration repository (create table)
                 try await repository.setup(context: context)
@@ -104,9 +122,10 @@ public actor PostgresMigrations {
                 let appliedMigrations = try await repository.getAll(context: context)
                 // if groups array passed in is empty then work out list of migration groups by combining
                 // list of groups from migrations and applied migrations
-                let groups = groups.count == 0
-                    ? (migrations.map(\.group) + appliedMigrations.map(\.group)).uniqueElements
-                    : groups
+                let groups =
+                    groups.count == 0
+                        ? (migrations.map(\.group) + appliedMigrations.map(\.group)).uniqueElements
+                        : groups
                 // for each group apply/revert migrations
                 for group in groups {
                     let groupMigrations = migrations.filter { $0.group == group }
@@ -114,20 +133,26 @@ public actor PostgresMigrations {
 
                     let minMigrationCount = min(groupMigrations.count, appliedGroupMigrations.count)
                     var i = 0
-                    while i < minMigrationCount, appliedGroupMigrations[i].name == groupMigrations[i].name {
+                    // while migrations and applied migrations are the same
+                    while i < minMigrationCount,
+                          appliedGroupMigrations[i].name == groupMigrations[i].name
+                    {
                         i += 1
                     }
                     // Revert deleted migrations, and any migrations after a deleted migration
                     for j in (i..<appliedGroupMigrations.count).reversed() {
                         let migrationName = appliedGroupMigrations[j].name
-                        // look for migration to revert in migration list and revert dictionary. NB we are looking in the migration
-                        // array belonging to the type, not the one supplied to the function
-                        guard let migration = self.migrations.first(where: { $0.name == migrationName }) ?? self.reverts[migrationName] else {
+                        logger.info("Reverting \(migrationName) from group \(group.name) \(dryRun ? " (dry run)" : "")")
+                        // look for migration to revert in registered migration list and revert dictionary.
+                        guard let migration = registeredMigrations.first(where: { $0.name == migrationName }) ?? registeredReverts[migrationName]
+                        else {
                             throw PostgresMigrationError.cannotRevertMigration
                         }
-                        logger.info("Reverting \(migration.name) from group \(group.name) \(dryRun ? " (dry run)" : "")")
                         if !dryRun {
-                            try await migration.revert(connection: context.connection, logger: context.logger)
+                            try await migration.revert(
+                                connection: context.connection,
+                                logger: context.logger
+                            )
                             try await repository.remove(migration, context: context)
                         } else {
                             requiresChanges = true
@@ -136,9 +161,13 @@ public actor PostgresMigrations {
                     // Apply migration
                     for j in i..<groupMigrations.count {
                         let migration = groupMigrations[j]
-                        logger.info("Migrating \(migration.name) from group \(group.name) \(dryRun ? " (dry run)" : "")")
+                        logger.info(
+                            "Migrating \(migration.name) from group \(group.name) \(dryRun ? " (dry run)" : "")"
+                        )
                         if !dryRun {
-                            try await migration.apply(connection: context.connection, logger: context.logger)
+                            try await migration.apply(
+                                connection: context.connection, logger: context.logger
+                            )
                             try await repository.add(migration, context: context)
                         } else {
                             requiresChanges = true
@@ -204,15 +233,15 @@ public actor PostgresMigrations {
 }
 
 /// Create, remove and list migrations
-struct PostgresMigrationRepository {
-    struct Context {
+struct PostgresMigrationRepository: Sendable {
+    struct Context: Sendable {
         let connection: PostgresConnection
         let logger: Logger
     }
 
     let client: PostgresClient
 
-    func withContext<Value>(logger: Logger, _ process: (Context) async throws -> Value) async throws -> Value {
+    func withContext<Value: Sendable>(logger: Logger, _ process: @Sendable (Context) async throws -> Value) async throws -> Value {
         try await self.client.withConnection { connection in
             try await process(.init(connection: connection, logger: logger))
         }

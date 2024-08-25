@@ -21,7 +21,7 @@ import ServiceLifecycle
 import XCTest
 
 final class PersistTests: XCTestCase {
-    func createApplication(_ updateRouter: (Router<BasicRequestContext>, PersistDriver) -> Void = { _, _ in }) async throws -> some ApplicationProtocol {
+    static func createApplication(_ updateRouter: (Router<BasicRequestContext>, PersistDriver) -> Void = { _, _ in }) async throws -> some ApplicationProtocol {
         struct PostgresErrorMiddleware<Context: RequestContext>: RouterMiddleware {
             func handle(_ request: Request, context: Context, next: (Request, Context) async throws -> Response) async throws -> Response {
                 do {
@@ -80,7 +80,7 @@ final class PersistTests: XCTestCase {
     }
 
     func testSetGet() async throws {
-        let app = try await self.createApplication()
+        let app = try await Self.createApplication()
         try await app.test(.router) { client in
             let tag = UUID().uuidString
             try await client.execute(uri: "/persist/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "Persist")) { _ in }
@@ -92,7 +92,7 @@ final class PersistTests: XCTestCase {
     }
 
     func testCreateGet() async throws {
-        let app = try await self.createApplication { router, persist in
+        let app = try await Self.createApplication { router, persist in
             router.put("/create/:tag") { request, context -> HTTPResponse.Status in
                 let buffer = try await request.body.collect(upTo: .max)
                 let tag = try context.parameters.require("tag")
@@ -111,7 +111,7 @@ final class PersistTests: XCTestCase {
     }
 
     func testDoubleCreateFail() async throws {
-        let app = try await self.createApplication { router, persist in
+        let app = try await Self.createApplication { router, persist in
             router.put("/create/:tag") { request, context -> HTTPResponse.Status in
                 let buffer = try await request.body.collect(upTo: .max)
                 let tag = try context.parameters.require("tag")
@@ -135,7 +135,7 @@ final class PersistTests: XCTestCase {
     }
 
     func testSetTwice() async throws {
-        let app = try await self.createApplication()
+        let app = try await Self.createApplication()
         try await app.test(.router) { client in
 
             let tag = UUID().uuidString
@@ -151,7 +151,7 @@ final class PersistTests: XCTestCase {
     }
 
     func testExpires() async throws {
-        let app = try await self.createApplication()
+        let app = try await Self.createApplication()
         try await app.test(.router) { client in
 
             let tag1 = UUID().uuidString
@@ -174,7 +174,7 @@ final class PersistTests: XCTestCase {
         struct TestCodable: Codable {
             let buffer: String
         }
-        let app = try await self.createApplication { router, persist in
+        let app = try await Self.createApplication { router, persist in
             router.put("/codable/:tag") { request, context -> HTTPResponse.Status in
                 guard let tag = context.parameters.get("tag") else { throw HTTPError(.badRequest) }
                 let buffer = try await request.body.collect(upTo: .max)
@@ -199,7 +199,7 @@ final class PersistTests: XCTestCase {
     }
 
     func testRemove() async throws {
-        let app = try await self.createApplication()
+        let app = try await Self.createApplication()
         try await app.test(.router) { client in
             let tag = UUID().uuidString
             try await client.execute(uri: "/persist/\(tag)", method: .put, body: ByteBufferAllocator().buffer(string: "ThisIsTest1")) { _ in }
@@ -211,7 +211,7 @@ final class PersistTests: XCTestCase {
     }
 
     func testExpireAndAdd() async throws {
-        let app = try await self.createApplication()
+        let app = try await Self.createApplication()
         try await app.test(.router) { client in
 
             let tag = UUID().uuidString
