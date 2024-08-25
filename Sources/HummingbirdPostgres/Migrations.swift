@@ -112,8 +112,13 @@ public actor PostgresMigrations {
         }
         let repository = PostgresMigrationRepository(client: client)
         do {
-            let registeredReverts = self.reverts
-            let registeredMigrations = self.migrations
+            let registeredMigrations = {
+                var registeredMigrations = self.reverts
+                for migration in self.migrations {
+                    registeredMigrations[migration.name] = migration
+                }
+                return registeredMigrations
+            }()
             _ = try await repository.withContext(logger: logger) { context in
                 // setup migration repository (create table)
                 try await repository.setup(context: context)
@@ -142,12 +147,13 @@ public actor PostgresMigrations {
                     // Revert deleted migrations, and any migrations after a deleted migration
                     for j in (i..<appliedGroupMigrations.count).reversed() {
                         let migrationName = appliedGroupMigrations[j].name
-                        logger.info("Reverting \(migrationName) from group \(group.name) \(dryRun ? " (dry run)" : "")")
                         // look for migration to revert in registered migration list and revert dictionary.
-                        guard let migration = registeredMigrations.first(where: { $0.name == migrationName }) ?? registeredReverts[migrationName]
+                        guard let migration = registeredMigrations[migrationName]
                         else {
+                            logger.error("Failed to find migration \(migrationName)")
                             throw PostgresMigrationError.cannotRevertMigration
                         }
+                        logger.info("Reverting \(migrationName) from group \(group.name) \(dryRun ? " (dry run)" : "")")
                         if !dryRun {
                             try await migration.revert(
                                 connection: context.connection,
