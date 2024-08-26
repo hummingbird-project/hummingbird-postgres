@@ -1,9 +1,7 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
-
-let swiftSettings: [SwiftSetting] = [.enableExperimentalFeature("StrictConcurrency=complete")]
 
 let package = Package(
     name: "hummingbird-postgres",
@@ -23,8 +21,7 @@ let package = Package(
             dependencies: [
                 .product(name: "Hummingbird", package: "hummingbird"),
                 .product(name: "PostgresNIO", package: "postgres-nio"),
-            ],
-            swiftSettings: swiftSettings
+            ]
         ),
         .target(
             name: "JobsPostgres",
@@ -32,8 +29,7 @@ let package = Package(
                 "HummingbirdPostgres",
                 .product(name: "Jobs", package: "swift-jobs"),
                 .product(name: "PostgresNIO", package: "postgres-nio"),
-            ],
-            swiftSettings: swiftSettings
+            ]
         ),
         .testTarget(
             name: "HummingbirdPostgresTests",
@@ -41,8 +37,7 @@ let package = Package(
                 "HummingbirdPostgres",
                 "JobsPostgres",
                 .product(name: "HummingbirdTesting", package: "hummingbird"),
-            ],
-            swiftSettings: swiftSettings
+            ]
         ),
     ]
 )
