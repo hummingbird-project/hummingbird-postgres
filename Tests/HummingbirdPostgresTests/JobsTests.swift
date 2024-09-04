@@ -150,6 +150,22 @@ final class JobsTests: XCTestCase {
         }
     }
 
+    func testDelayedJobs() async throws {
+        let jobIdentifer = JobIdentifier<Int>(#function)
+        let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 1)
+
+        try await self.testJobQueue(numWorkers: 1) { jobQueue in
+            jobQueue.registerJob(id: jobIdentifer) { parameters, context in
+                context.logger.info("Parameters=\(parameters)")
+                try await Task.sleep(for: .milliseconds(Int.random(in: 10..<50)))
+                expectation.fulfill()
+            }
+            try await jobQueue.push(id: jobIdentifer, parameters: 1, delayedUntil: Date().addingTimeInterval(20))
+
+            await self.wait(for: [expectation], timeout: 5)
+        }
+    }
+
     func testMultipleWorkers() async throws {
         let jobIdentifer = JobIdentifier<Int>(#function)
         let runningJobCounter = ManagedAtomic(0)

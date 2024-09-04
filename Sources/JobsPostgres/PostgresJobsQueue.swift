@@ -111,6 +111,7 @@ public final class PostgresJobQueue: JobQueueDriver {
         await migrations.add(CreateJobs())
         await migrations.add(CreateJobQueue())
         await migrations.add(CreateJobQueueMetadata())
+        await migrations.add(CreateJobDelay())
     }
 
     /// Run on initialization of the job queue
@@ -132,11 +133,11 @@ public final class PostgresJobQueue: JobQueueDriver {
 
     /// Push Job onto queue
     /// - Returns: Identifier of queued job
-    @discardableResult public func push(_ buffer: ByteBuffer) async throws -> JobID {
+    @discardableResult public func push(_ buffer: ByteBuffer, delayUntil: Date?) async throws -> JobID {
         try await self.client.withTransaction(logger: self.logger) { connection in
             let queuedJob = QueuedJob<JobID>(id: .init(), jobBuffer: buffer)
-            try await self.add(queuedJob, connection: connection)
-            try await self.addToQueue(jobId: queuedJob.id, connection: connection)
+            try await self.add(queuedJob, connection: connection, delayUntil: delayUntil)
+            try await self.addToQueue(jobId: queuedJob.id, connection: connection, delayUntil: delayUntil)
             return queuedJob.id
         }
     }
@@ -194,6 +195,7 @@ public final class PostgresJobQueue: JobQueueDriver {
                         WHERE pse.job_id =
                             (SELECT pse_inner.job_id
                             FROM _hb_pg_job_queue pse_inner
+                            WHERE delayed_until IS NULL OR delayed_until <= Now() + INTERVAL '5 MINUTES'
                             ORDER BY pse_inner.createdAt ASC
                                 FOR UPDATE SKIP LOCKED
                             LIMIT 1)
@@ -238,11 +240,11 @@ public final class PostgresJobQueue: JobQueueDriver {
         }
     }
 
-    func add(_ job: QueuedJob<JobID>, connection: PostgresConnection) async throws {
+    func add(_ job: QueuedJob<JobID>, connection: PostgresConnection, delayUntil: Date?) async throws {
         try await connection.query(
             """
-            INSERT INTO _hb_pg_jobs (id, job, status)
-            VALUES (\(job.id), \(job.jobBuffer), \(Status.pending))
+            INSERT INTO _hb_pg_jobs (id, job, status, delayed_until)
+            VALUES (\(job.id), \(job.jobBuffer), \(Status.pending), \(delayUntil))
             """,
             logger: self.logger
         )
@@ -255,10 +257,10 @@ public final class PostgresJobQueue: JobQueueDriver {
         )
     }
 
-    func addToQueue(jobId: JobID, connection: PostgresConnection) async throws {
+    func addToQueue(jobId: JobID, connection: PostgresConnection, delayUntil: Date?) async throws {
         try await connection.query(
             """
-            INSERT INTO _hb_pg_job_queue (job_id, createdAt) VALUES (\(jobId), \(Date.now))
+            INSERT INTO _hb_pg_job_queue (job_id, createdAt, delayed_until) VALUES (\(jobId), \(Date.now), \(delayUntil))
             """,
             logger: self.logger
         )
@@ -278,14 +280,14 @@ public final class PostgresJobQueue: JobQueueDriver {
         )
     }
 
-    func getJobs(withStatus status: Status) async throws -> [JobID] {
+    func getJobs(withStatus status: Status) async throws -> [(JobID, Date?)] {
         let stream = try await self.client.query(
-            "SELECT id FROM _hb_pg_jobs WHERE status = \(status) FOR UPDATE SKIP LOCKED",
+            "SELECT id, delayed_until FROM _hb_pg_jobs WHERE status = \(status) FOR UPDATE SKIP LOCKED",
             logger: self.logger
         )
-        var jobs: [JobID] = []
-        for try await id in stream.decode(JobID.self, context: .default) {
-            jobs.append(id)
+        var jobs: [(JobID, Date?)] = []
+        for try await (id, delayUntil) in stream.decode((JobID, Date?).self, context: .default) {
+            jobs.append((id, delayUntil))
         }
         return jobs
     }
@@ -303,8 +305,8 @@ public final class PostgresJobQueue: JobQueueDriver {
 
             let jobs = try await getJobs(withStatus: status)
             self.logger.info("Moving \(jobs.count) jobs with status: \(status) to job queue")
-            for jobId in jobs {
-                try await self.addToQueue(jobId: jobId, connection: connection)
+            for (jobId, delayUntil) in jobs {
+                try await self.addToQueue(jobId: jobId, connection: connection, delayUntil: delayUntil)
             }
 
         case .doNothing:
