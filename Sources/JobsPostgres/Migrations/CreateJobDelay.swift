@@ -24,28 +24,11 @@ struct CreateJobDelay: PostgresMigration {
             """,
             logger: logger
         )
-        try await connection.query(
-            """
-            ALTER TABLE _hb_pg_jobs ADD COLUMN IF NOT EXISTS delayed_until TIMESTAMP WITH TIME ZONE
-            """,
-            logger: logger
-        )
-        try await connection.query(
-            """
-            CREATE INDEX IF NOT EXISTS _hb_job_delay_idx 
-            ON _hb_pg_job_queue(delayed_until ASC)
-            """,
-            logger: logger
-        )
     }
 
     func revert(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
             "ALTER TABLE _hb_pg_job_queue DROP COLUMN delayed_until",
-            logger: logger
-        )
-        try await connection.query(
-            "ALTER TABLE _hb_pg_jobs DROP COLUMN delayed_until",
             logger: logger
         )
     }

@@ -152,18 +152,33 @@ final class JobsTests: XCTestCase {
 
     func testDelayedJobs() async throws {
         let jobIdentifer = JobIdentifier<Int>(#function)
-        let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 1)
+        let jobIdentifer2 = JobIdentifier<Int>(#function)
+        let expectation = XCTestExpectation(description: "TestJob.execute was called", expectedFulfillmentCount: 2)
+        let jobExecutionSequence: NIOLockedValueBox<[Int]> = .init([])
 
         try await self.testJobQueue(numWorkers: 1) { jobQueue in
             jobQueue.registerJob(id: jobIdentifer) { parameters, context in
                 context.logger.info("Parameters=\(parameters)")
+                jobExecutionSequence.withLockedValue {
+                    $0.append(parameters)
+                }
                 try await Task.sleep(for: .milliseconds(Int.random(in: 10..<50)))
                 expectation.fulfill()
             }
-            try await jobQueue.push(id: jobIdentifer, parameters: 1, delayedUntil: Date().addingTimeInterval(20))
+            try await jobQueue.push(id: jobIdentifer, parameters: 1, executionOptions: [
+                .delay(until: Date.now.addingTimeInterval(5)),
+            ])
+            try await jobQueue.push(id: jobIdentifer2, parameters: 5)
 
-            await self.wait(for: [expectation], timeout: 5)
+            let processingJobs = try await jobQueue.queue.getJobs(withStatus: .pending)
+            XCTAssertEqual(processingJobs.count, 2)
+
+            await self.wait(for: [expectation], timeout: 10)
+
+            let pendingJobs = try await jobQueue.queue.getJobs(withStatus: .pending)
+            XCTAssertEqual(pendingJobs.count, 0)
         }
+        XCTAssertEqual(jobExecutionSequence.withLockedValue { $0 }, [5, 1])
     }
 
     func testMultipleWorkers() async throws {
