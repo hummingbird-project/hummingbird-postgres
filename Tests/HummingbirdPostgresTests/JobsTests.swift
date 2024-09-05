@@ -165,8 +165,8 @@ final class JobsTests: XCTestCase {
                 try await Task.sleep(for: .milliseconds(Int.random(in: 10..<50)))
                 expectation.fulfill()
             }
-            try await jobQueue.push(id: jobIdentifer, parameters: 1, executionOptions: [
-                .delay(until: Date.now.addingTimeInterval(5)),
+            try await jobQueue.push(id: jobIdentifer, parameters: 1, options: [
+                .delay(until: Date.now.addingTimeInterval(1)),
             ])
             try await jobQueue.push(id: jobIdentifer2, parameters: 5)
 

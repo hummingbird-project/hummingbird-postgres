@@ -133,11 +133,11 @@ public final class PostgresJobQueue: JobQueueDriver {
 
     /// Push Job onto queue
     /// - Returns: Identifier of queued job
-    @discardableResult public func push(_ buffer: ByteBuffer, executionOptions: JobExecutionOptions) async throws -> JobID {
+    @discardableResult public func push(_ buffer: ByteBuffer, options: JobExecutionOptions) async throws -> JobID {
         try await self.client.withTransaction(logger: self.logger) { connection in
             let queuedJob = QueuedJob<JobID>(id: .init(), jobBuffer: buffer)
             try await self.add(queuedJob, connection: connection)
-            try await self.addToQueue(jobId: queuedJob.id, connection: connection, delayUntil: executionOptions.delayedUntil())
+            try await self.addToQueue(jobId: queuedJob.id, connection: connection, delayUntil: options.delayedUntil())
             return queuedJob.id
         }
     }
@@ -194,7 +194,7 @@ public final class PostgresJobQueue: JobQueueDriver {
                             _hb_pg_job_queue
                         USING (
                             SELECT job_id FROM _hb_pg_job_queue
-                            WHERE (delayed_until IS NULL OR delayed_until <= NOW() AT TIME ZONE 'utc')
+                            WHERE (delayed_until IS NULL OR delayed_until <= NOW())
                             ORDER BY createdAt, delayed_until ASC
                             LIMIT 1
                             FOR UPDATE SKIP LOCKED
