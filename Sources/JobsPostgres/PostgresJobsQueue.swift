@@ -133,11 +133,11 @@ public final class PostgresJobQueue: JobQueueDriver {
 
     /// Push Job onto queue
     /// - Returns: Identifier of queued job
-    @discardableResult public func push(_ buffer: ByteBuffer, options: JobExecutionOptions) async throws -> JobID {
+    @discardableResult public func push(_ buffer: ByteBuffer, options: JobOptions) async throws -> JobID {
         try await self.client.withTransaction(logger: self.logger) { connection in
             let queuedJob = QueuedJob<JobID>(id: .init(), jobBuffer: buffer)
             try await self.add(queuedJob, connection: connection)
-            try await self.addToQueue(jobId: queuedJob.id, connection: connection, delayUntil: options.delayedUntil())
+            try await self.addToQueue(jobId: queuedJob.id, connection: connection, delayUntil: options.delayUntil)
             return queuedJob.id
         }
     }
