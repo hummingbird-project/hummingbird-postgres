@@ -111,6 +111,7 @@ public final class PostgresJobQueue: JobQueueDriver {
         await migrations.add(CreateJobs())
         await migrations.add(CreateJobQueue())
         await migrations.add(CreateJobQueueMetadata())
+        await migrations.add(CreateJobDelay())
     }
 
     /// Run on initialization of the job queue
@@ -132,11 +133,11 @@ public final class PostgresJobQueue: JobQueueDriver {
 
     /// Push Job onto queue
     /// - Returns: Identifier of queued job
-    @discardableResult public func push(_ buffer: ByteBuffer) async throws -> JobID {
+    @discardableResult public func push(_ buffer: ByteBuffer, options: JobOptions) async throws -> JobID {
         try await self.client.withTransaction(logger: self.logger) { connection in
             let queuedJob = QueuedJob<JobID>(id: .init(), jobBuffer: buffer)
             try await self.add(queuedJob, connection: connection)
-            try await self.addToQueue(jobId: queuedJob.id, connection: connection)
+            try await self.addToQueue(jobId: queuedJob.id, connection: connection, delayUntil: options.delayUntil)
             return queuedJob.id
         }
     }
@@ -189,15 +190,17 @@ public final class PostgresJobQueue: JobQueueDriver {
 
                     let stream = try await connection.query(
                         """
-                        DELETE
-                        FROM _hb_pg_job_queue pse
-                        WHERE pse.job_id =
-                            (SELECT pse_inner.job_id
-                            FROM _hb_pg_job_queue pse_inner
-                            ORDER BY pse_inner.createdAt ASC
-                                FOR UPDATE SKIP LOCKED
-                            LIMIT 1)
-                        RETURNING pse.job_id
+                        DELETE FROM
+                            _hb_pg_job_queue
+                        USING (
+                            SELECT job_id FROM _hb_pg_job_queue
+                            WHERE (delayed_until IS NULL OR delayed_until <= NOW())
+                            ORDER BY createdAt, delayed_until ASC
+                            LIMIT 1
+                            FOR UPDATE SKIP LOCKED
+                        ) queued
+                        WHERE queued.job_id = _hb_pg_job_queue.job_id
+                        RETURNING _hb_pg_job_queue.job_id
                         """,
                         logger: self.logger
                     )
@@ -255,10 +258,10 @@ public final class PostgresJobQueue: JobQueueDriver {
         )
     }
 
-    func addToQueue(jobId: JobID, connection: PostgresConnection) async throws {
+    func addToQueue(jobId: JobID, connection: PostgresConnection, delayUntil: Date?) async throws {
         try await connection.query(
             """
-            INSERT INTO _hb_pg_job_queue (job_id, createdAt) VALUES (\(jobId), \(Date.now))
+            INSERT INTO _hb_pg_job_queue (job_id, createdAt, delayed_until) VALUES (\(jobId), \(Date.now), \(delayUntil))
             """,
             logger: self.logger
         )
@@ -304,7 +307,7 @@ public final class PostgresJobQueue: JobQueueDriver {
             let jobs = try await getJobs(withStatus: status)
             self.logger.info("Moving \(jobs.count) jobs with status: \(status) to job queue")
             for jobId in jobs {
-                try await self.addToQueue(jobId: jobId, connection: connection)
+                try await self.addToQueue(jobId: jobId, connection: connection, delayUntil: nil)
             }
 
         case .doNothing:
