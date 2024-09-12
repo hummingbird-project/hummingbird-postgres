@@ -14,7 +14,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0"),
-        .package(url: "https://github.com/thoven87/swift-jobs.git", branch: "stevenson/delayed-jobs"),
+        .package(url: "https://github.com/hummingbird-project/swift-jobs.git", from: "1.0.0-beta.2"),
         .package(url: "https://github.com/vapor/postgres-nio", from: "1.21.0"),
     ],
     targets: [
