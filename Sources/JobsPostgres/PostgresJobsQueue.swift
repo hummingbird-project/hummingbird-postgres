@@ -142,21 +142,6 @@ public final class PostgresJobQueue: JobQueueDriver {
         }
     }
 
-    public func retry(jobId: JobID, buffer: ByteBuffer, options: Jobs.JobOptions) async throws {
-        try await self.client.withTransaction(logger: self.logger) { connection in
-            try await connection.query(
-                """
-                UPDATE _hb_pg_jobs
-                    SET job = \(buffer),
-                    lastModified = \(Date.now)
-                WHERE id = \(jobId)
-                """,
-                logger: self.logger
-            )
-            try await self.addToQueue(jobId: jobId, connection: connection, delayUntil: options.delayUntil)
-        }
-    }
-
     /// This is called to say job has finished processing and it can be deleted
     public func finished(jobId: JobID) async throws {
         try await self.delete(jobId: jobId)

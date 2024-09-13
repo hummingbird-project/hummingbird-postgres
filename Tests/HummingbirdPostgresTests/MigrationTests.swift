@@ -14,7 +14,7 @@ final class MigrationTests: XCTestCase {
                 self.value = .init(1)
             }
 
-            func expect(_ value: Int, file: StaticString = #file, line: UInt = #line) {
+            func expect(_ value: Int, file: StaticString = #filePath, line: UInt = #line) {
                 XCTAssertEqual(value, self.value.load(ordering: .relaxed), file: file, line: line)
                 self.value.wrappingIncrement(by: 1, ordering: .relaxed)
             }
