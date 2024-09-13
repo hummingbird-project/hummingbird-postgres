@@ -102,6 +102,11 @@ public final class PostgresJobQueue: JobQueueDriver {
     let isStopped: NIOLockedValueBox<Bool>
 
     /// Initialize a PostgresJobQueue
+    /// - Parameters:
+    ///   - client: Postgres client
+    ///   - migrations: Database migrations to update
+    ///   - configuration: Queue configuration
+    ///   - logger: Logger used by queue
     public init(client: PostgresClient, migrations: PostgresMigrations, configuration: Configuration = .init(), logger: Logger) async {
         self.client = client
         self.configuration = configuration
@@ -347,6 +352,7 @@ extension JobQueueDriver where Self == PostgresJobQueue {
     /// Return Postgres driver for Job Queue
     /// - Parameters:
     ///   - client: Postgres client
+    ///   - migrations: Database migrations to update
     ///   - configuration: Queue configuration
     ///   - logger: Logger used by queue
     public static func postgres(client: PostgresClient, migrations: PostgresMigrations, configuration: PostgresJobQueue.Configuration = .init(), logger: Logger) async -> Self {
