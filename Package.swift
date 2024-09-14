@@ -14,7 +14,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0"),
-        .package(url: "https://github.com/thoven87/swift-jobs.git", branch: "stevenson/retry-backoff"),
+        .package(url: "https://github.com/hummingbird-project/swift-jobs.git", branch: "main"),
         .package(url: "https://github.com/vapor/postgres-nio", from: "1.21.0"),
     ],
     targets: [
