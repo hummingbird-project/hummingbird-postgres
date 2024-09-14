@@ -261,7 +261,10 @@ public final class PostgresJobQueue: JobQueueDriver {
     func addToQueue(jobId: JobID, connection: PostgresConnection, delayUntil: Date?) async throws {
         try await connection.query(
             """
-            INSERT INTO _hb_pg_job_queue (job_id, createdAt, delayed_until) VALUES (\(jobId), \(Date.now), \(delayUntil))
+            INSERT INTO _hb_pg_job_queue (job_id, createdAt, delayed_until)
+            VALUES (\(jobId), \(Date.now), \(delayUntil))
+            ON CONFLICT (job_id)
+            DO UPDATE SET delayed_until = \(delayUntil)
             """,
             logger: self.logger
         )
