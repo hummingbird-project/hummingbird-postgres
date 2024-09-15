@@ -68,7 +68,7 @@ public final class PostgresPersistDriver: PersistDriver {
     /// - Parameters:
     ///   - client: Postgres client
     ///   - migrations: Migrations array to add persist migrations
-    ///   - tidyUpFrequequency: How frequently cleanup expired database entries should occur
+    ///   - tidyUpFrequency: How frequently cleanup expired database entries should occur
     ///   - logger: Logger used by persist
     public init(client: PostgresClient, migrations: PostgresMigrations, tidyUpFrequency: Duration = .seconds(600), logger: Logger) async {
         self.client = client

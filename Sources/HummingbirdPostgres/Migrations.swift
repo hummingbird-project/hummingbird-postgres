@@ -63,9 +63,9 @@ public actor PostgresMigrations {
     ///
     /// - Parameters:
     ///   - client: Postgres client
+    ///   - groups: Migration groups to apply, an empty array means all groups
     ///   - logger: Logger to use
     ///   - dryRun: Should migrations actually be applied, or should we just report what would be applied and reverted
-
     public func apply(
         client: PostgresClient,
         groups: [PostgresMigrationGroup] = [],
@@ -83,9 +83,9 @@ public actor PostgresMigrations {
     /// Revert database migrations
     /// - Parameters:
     ///   - client: Postgres client
+    ///   - groups: Migration groups to revert, an empty array means all groups
     ///   - logger: Logger to use
     ///   - dryRun: Should migrations actually be reverted, or should we just report what would be reverted
-
     public func revert(
         client: PostgresClient,
         groups: [PostgresMigrationGroup] = [],
