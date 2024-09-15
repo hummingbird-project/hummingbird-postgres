@@ -13,8 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 import Atomics
-import Hummingbird
-import HummingbirdTesting
 import Jobs
 @testable import JobsPostgres
 import NIOConcurrencyHelpers
@@ -49,8 +47,6 @@ final class JobsTests: XCTestCase {
         await fulfillment(of: expectations, timeout: timeout)
         #endif
     }
-
-    static let env = Environment()
 
     func createJobQueue(numWorkers: Int, configuration: PostgresJobQueue.Configuration, function: String = #function) async throws -> JobQueue<PostgresJobQueue> {
         let logger = {

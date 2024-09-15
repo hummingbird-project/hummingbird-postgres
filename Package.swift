@@ -55,14 +55,12 @@ let package = Package(
             name: "PostgresMigrationsTests",
             dependencies: [
                 "PostgresMigrations",
-                .product(name: "HummingbirdTesting", package: "hummingbird"),
             ]
         ),
         .testTarget(
             name: "JobsPostgresTests",
             dependencies: [
                 "JobsPostgres",
-                .product(name: "HummingbirdTesting", package: "hummingbird"),
             ]
         ),
     ]
