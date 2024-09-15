@@ -13,9 +13,10 @@
 //===----------------------------------------------------------------------===//
 
 import Logging
+import PostgresMigrations
 import PostgresNIO
 
-struct CreatePersistTable: PostgresMigration {
+struct CreatePersistTable: DatabaseMigration {
     func apply(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
             """
@@ -37,10 +38,10 @@ struct CreatePersistTable: PostgresMigration {
     }
 
     var name: String { "_Create_Persist_Table_" }
-    var group: PostgresMigrationGroup { .persist }
+    var group: DatabaseMigrationGroup { .persist }
 }
 
-extension PostgresMigrationGroup {
+extension DatabaseMigrationGroup {
     /// Persist driver migration group
     public static var persist: Self { .init("_hb_pg_persist") }
 }

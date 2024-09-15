@@ -13,11 +13,11 @@
 //===----------------------------------------------------------------------===//
 
 import Foundation
-import HummingbirdPostgres
 import Jobs
 import Logging
 import NIOConcurrencyHelpers
 import NIOCore
+import PostgresMigrations
 import PostgresNIO
 
 /// Postgres Job queue implementation
@@ -98,7 +98,7 @@ public final class PostgresJobQueue: JobQueueDriver {
     /// Logger used by queue
     public let logger: Logger
 
-    let migrations: PostgresMigrations
+    let migrations: DatabaseMigrations
     let isStopped: NIOLockedValueBox<Bool>
 
     /// Initialize a PostgresJobQueue
@@ -107,7 +107,7 @@ public final class PostgresJobQueue: JobQueueDriver {
     ///   - migrations: Database migrations to update
     ///   - configuration: Queue configuration
     ///   - logger: Logger used by queue
-    public init(client: PostgresClient, migrations: PostgresMigrations, configuration: Configuration = .init(), logger: Logger) async {
+    public init(client: PostgresClient, migrations: DatabaseMigrations, configuration: Configuration = .init(), logger: Logger) async {
         self.client = client
         self.configuration = configuration
         self.logger = logger
@@ -358,7 +358,7 @@ extension JobQueueDriver where Self == PostgresJobQueue {
     ///   - migrations: Database migrations to update
     ///   - configuration: Queue configuration
     ///   - logger: Logger used by queue
-    public static func postgres(client: PostgresClient, migrations: PostgresMigrations, configuration: PostgresJobQueue.Configuration = .init(), logger: Logger) async -> Self {
+    public static func postgres(client: PostgresClient, migrations: DatabaseMigrations, configuration: PostgresJobQueue.Configuration = .init(), logger: Logger) async -> Self {
         await Self(client: client, migrations: migrations, configuration: configuration, logger: logger)
     }
 }

@@ -19,14 +19,21 @@ let package = Package(
         .target(
             name: "HummingbirdPostgres",
             dependencies: [
+                "PostgresMigrations",
                 .product(name: "Hummingbird", package: "hummingbird"),
+                .product(name: "PostgresNIO", package: "postgres-nio"),
+            ]
+        ),
+        .target(
+            name: "PostgresMigrations",
+            dependencies: [
                 .product(name: "PostgresNIO", package: "postgres-nio"),
             ]
         ),
         .target(
             name: "JobsPostgres",
             dependencies: [
-                "HummingbirdPostgres",
+                "PostgresMigrations",
                 .product(name: "Jobs", package: "swift-jobs"),
                 .product(name: "PostgresNIO", package: "postgres-nio"),
             ]
@@ -35,6 +42,19 @@ let package = Package(
             name: "HummingbirdPostgresTests",
             dependencies: [
                 "HummingbirdPostgres",
+                .product(name: "HummingbirdTesting", package: "hummingbird"),
+            ]
+        ),
+        .testTarget(
+            name: "PostgresMigrationsTests",
+            dependencies: [
+                "PostgresMigrations",
+                .product(name: "HummingbirdTesting", package: "hummingbird"),
+            ]
+        ),
+        .testTarget(
+            name: "JobsPostgresTests",
+            dependencies: [
                 "JobsPostgres",
                 .product(name: "HummingbirdTesting", package: "hummingbird"),
             ]

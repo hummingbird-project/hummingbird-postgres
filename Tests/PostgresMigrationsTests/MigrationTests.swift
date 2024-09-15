@@ -1,12 +1,24 @@
 import Atomics
-@testable import HummingbirdPostgres
+import Foundation
 import Logging
+@testable import PostgresMigrations
 import PostgresNIO
 import XCTest
 
+func getPostgresConfiguration() async throws -> PostgresClient.Configuration {
+    return .init(
+        host: ProcessInfo.processInfo.environment["POSTGRES_HOSTNAME"] ?? "localhost",
+        port: 5432,
+        username: ProcessInfo.processInfo.environment["POSTGRES_USER"] ?? "test_user",
+        password: ProcessInfo.processInfo.environment["POSTGRES_PASSWORD"] ?? "test_password",
+        database: ProcessInfo.processInfo.environment["POSTGRES_DB"] ?? "test_db",
+        tls: .disable
+    )
+}
+
 final class MigrationTests: XCTestCase {
     /// Test migration used to verify order or apply and reverts
-    struct TestMigration: PostgresMigration {
+    struct TestMigration: DatabaseMigration {
         final class Order: Sendable {
             let value: ManagedAtomic<Int>
 
@@ -25,7 +37,7 @@ final class MigrationTests: XCTestCase {
             order: Order = Order(),
             applyOrder: Int? = nil,
             revertOrder: Int? = nil,
-            group: PostgresMigrationGroup = .default
+            group: DatabaseMigrationGroup = .default
         ) {
             self.order = order
             self.name = name
@@ -47,7 +59,7 @@ final class MigrationTests: XCTestCase {
         }
 
         let name: String
-        let group: PostgresMigrationGroup
+        let group: DatabaseMigrationGroup
         let order: Order
         let expectedApply: Int?
         let expectedRevert: Int?
@@ -59,9 +71,9 @@ final class MigrationTests: XCTestCase {
 
     func testMigrations(
         revert: Bool = true,
-        groups: [PostgresMigrationGroup] = [.default],
-        _ setup: (PostgresMigrations) async throws -> Void,
-        verify: (PostgresMigrations, PostgresClient) async throws -> Void
+        groups: [DatabaseMigrationGroup] = [.default],
+        _ setup: (DatabaseMigrations) async throws -> Void,
+        verify: (DatabaseMigrations, PostgresClient) async throws -> Void
     ) async throws {
         let logger = {
             var logger = Logger(label: "MigrationTests")
@@ -72,7 +84,7 @@ final class MigrationTests: XCTestCase {
             configuration: getPostgresConfiguration(),
             backgroundLogger: logger
         )
-        let migrations = PostgresMigrations()
+        let migrations = DatabaseMigrations()
         try await setup(migrations)
         do {
             try await withThrowingTaskGroup(of: Void.self) { group in
@@ -93,7 +105,7 @@ final class MigrationTests: XCTestCase {
         }
     }
 
-    func getAll(client: PostgresClient, groups: [PostgresMigrationGroup] = [.default]) async throws -> [String] {
+    func getAll(client: PostgresClient, groups: [DatabaseMigrationGroup] = [.default]) async throws -> [String] {
         let repository = PostgresMigrationRepository(client: client)
         return try await repository.withContext(logger: Self.logger) { context in
             try await repository.getAll(context: context).compactMap { migration in
@@ -336,6 +348,6 @@ final class MigrationTests: XCTestCase {
     }
 }
 
-extension PostgresMigrationGroup {
+extension DatabaseMigrationGroup {
     static var test: Self { .init("test") }
 }

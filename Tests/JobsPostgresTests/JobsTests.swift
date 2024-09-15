@@ -14,14 +14,25 @@
 
 import Atomics
 import Hummingbird
-@testable import HummingbirdPostgres
 import HummingbirdTesting
 import Jobs
 @testable import JobsPostgres
 import NIOConcurrencyHelpers
+import PostgresMigrations
 import PostgresNIO
 import ServiceLifecycle
 import XCTest
+
+func getPostgresConfiguration() async throws -> PostgresClient.Configuration {
+    return .init(
+        host: ProcessInfo.processInfo.environment["POSTGRES_HOSTNAME"] ?? "localhost",
+        port: 5432,
+        username: ProcessInfo.processInfo.environment["POSTGRES_USER"] ?? "test_user",
+        password: ProcessInfo.processInfo.environment["POSTGRES_PASSWORD"] ?? "test_password",
+        database: ProcessInfo.processInfo.environment["POSTGRES_DB"] ?? "test_db",
+        tls: .disable
+    )
+}
 
 extension XCTestExpectation {
     convenience init(description: String, expectedFulfillmentCount: Int) {
@@ -51,7 +62,7 @@ final class JobsTests: XCTestCase {
             configuration: getPostgresConfiguration(),
             backgroundLogger: logger
         )
-        let postgresMigrations = PostgresMigrations()
+        let postgresMigrations = DatabaseMigrations()
         return await JobQueue(
             .postgres(
                 client: postgresClient,
@@ -393,7 +404,7 @@ final class JobsTests: XCTestCase {
             configuration: getPostgresConfiguration(),
             backgroundLogger: logger
         )
-        let postgresMigrations = PostgresMigrations()
+        let postgresMigrations = DatabaseMigrations()
         let jobQueue = await JobQueue(
             .postgres(
                 client: postgresClient,
@@ -404,7 +415,7 @@ final class JobsTests: XCTestCase {
             numWorkers: 2,
             logger: logger
         )
-        let postgresMigrations2 = PostgresMigrations()
+        let postgresMigrations2 = DatabaseMigrations()
         let jobQueue2 = await JobQueue(
             .postgres(
                 client: postgresClient,
@@ -455,7 +466,7 @@ final class JobsTests: XCTestCase {
             group.addTask {
                 await postgresClient.run()
             }
-            let postgresMigrations = PostgresMigrations()
+            let postgresMigrations = DatabaseMigrations()
             let jobQueue = await PostgresJobQueue(
                 client: postgresClient,
                 migrations: postgresMigrations,

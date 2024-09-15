@@ -26,17 +26,17 @@ public struct PostgresMigrationError: Error, Equatable {
     }
 
     /// The database requires a migration before the application can run
-    static var requiresChanges: Self { .init(.requiresChanges) }
+    public static var requiresChanges: Self { .init(.requiresChanges) }
     /// Cannot revert a migration as we do not have its details. Add it to the revert list using
     /// PostgresMigrations.add(revert:)
-    static var cannotRevertMigration: Self { .init(.cannotRevertMigration) }
+    public static var cannotRevertMigration: Self { .init(.cannotRevertMigration) }
 }
 
 extension PostgresMigrationError: CustomStringConvertible {
     public var description: String {
         switch self.value {
         case .requiresChanges: "Database requires changes. Run `migrate` with `dryRun` set to false."
-        case .cannotRevertMigration: "Cannot revert migration because we don't have its details. Use `PostgresMigrations.register` to register the Migration."
+        case .cannotRevertMigration: "Cannot revert migration because we don't have its details. Use `PostgresMigrations.register` to register the DatabaseMigration."
         }
     }
 }
