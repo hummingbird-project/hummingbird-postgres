@@ -8,6 +8,7 @@ let package = Package(
     platforms: [.macOS(.v14), .iOS(.v17), .tvOS(.v17)],
     products: [
         .library(name: "HummingbirdPostgres", targets: ["HummingbirdPostgres"]),
+        .library(name: "PostgresMigrations", targets: ["PostgresMigrations"]),
         .library(name: "JobsPostgres", targets: ["JobsPostgres"]),
     ],
     dependencies: [
