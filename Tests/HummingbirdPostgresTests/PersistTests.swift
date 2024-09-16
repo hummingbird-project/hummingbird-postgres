@@ -16,9 +16,22 @@ import Hummingbird
 import HummingbirdPostgres
 import HummingbirdTesting
 import Logging
+import PostgresMigrations
 import PostgresNIO
 import ServiceLifecycle
 import XCTest
+
+func getPostgresConfiguration() async throws -> PostgresClient.Configuration {
+    let env = try await Environment().merging(with: .dotEnv())
+    return .init(
+        host: env.get("POSTGRES_HOSTNAME") ?? "localhost",
+        port: env.get("POSTGRES_PORT", as: Int.self) ?? 5432,
+        username: env.get("POSTGRES_USER") ?? "test_user",
+        password: env.get("POSTGRES_PASSWORD") ?? "test_password",
+        database: env.get("POSTGRES_DB") ?? "test_db",
+        tls: .disable
+    )
+}
 
 final class PersistTests: XCTestCase {
     static func createApplication(_ updateRouter: (Router<BasicRequestContext>, PersistDriver) -> Void = { _, _ in }) async throws -> some ApplicationProtocol {
@@ -43,7 +56,7 @@ final class PersistTests: XCTestCase {
             configuration: getPostgresConfiguration(),
             backgroundLogger: logger
         )
-        let postgresMigrations = PostgresMigrations()
+        let postgresMigrations = DatabaseMigrations()
         let persist = await PostgresPersistDriver(client: postgresClient, migrations: postgresMigrations, logger: logger)
         let router = Router()
         router.middlewares.add(PostgresErrorMiddleware())

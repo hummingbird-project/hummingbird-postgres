@@ -10,6 +10,7 @@ let package = Package(
     platforms: [.macOS(.v14), .iOS(.v17), .tvOS(.v17)],
     products: [
         .library(name: "HummingbirdPostgres", targets: ["HummingbirdPostgres"]),
+        .library(name: "PostgresMigrations", targets: ["PostgresMigrations"]),
         .library(name: "JobsPostgres", targets: ["JobsPostgres"]),
     ],
     dependencies: [
@@ -21,7 +22,15 @@ let package = Package(
         .target(
             name: "HummingbirdPostgres",
             dependencies: [
+                "PostgresMigrations",
                 .product(name: "Hummingbird", package: "hummingbird"),
+                .product(name: "PostgresNIO", package: "postgres-nio"),
+            ],
+            swiftSettings: swiftSettings
+        ),
+        .target(
+            name: "PostgresMigrations",
+            dependencies: [
                 .product(name: "PostgresNIO", package: "postgres-nio"),
             ],
             swiftSettings: swiftSettings
@@ -29,7 +38,7 @@ let package = Package(
         .target(
             name: "JobsPostgres",
             dependencies: [
-                "HummingbirdPostgres",
+                "PostgresMigrations",
                 .product(name: "Jobs", package: "swift-jobs"),
                 .product(name: "PostgresNIO", package: "postgres-nio"),
             ],
@@ -39,10 +48,20 @@ let package = Package(
             name: "HummingbirdPostgresTests",
             dependencies: [
                 "HummingbirdPostgres",
-                "JobsPostgres",
                 .product(name: "HummingbirdTesting", package: "hummingbird"),
-            ],
-            swiftSettings: swiftSettings
+            ]
+        ),
+        .testTarget(
+            name: "PostgresMigrationsTests",
+            dependencies: [
+                "PostgresMigrations",
+            ]
+        ),
+        .testTarget(
+            name: "JobsPostgresTests",
+            dependencies: [
+                "JobsPostgres",
+            ]
         ),
     ]
 )

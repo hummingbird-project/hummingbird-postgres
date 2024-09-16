@@ -1,9 +1,9 @@
-import HummingbirdPostgres
 import Jobs
 import JobsPostgres
 import Logging
 import NIOCore
 import NIOPosix
+import PostgresMigrations
 import PostgresNIO
 import ServiceLifecycle
 
@@ -13,7 +13,7 @@ let postgresClient = PostgresClient(
     configuration: .init(host: "localhost", port: 5432, username: "test_user", password: "test_password", database: "test_db", tls: .disable),
     backgroundLogger: logger
 )
-let postgresMigrations = PostgresMigrations()
+let postgresMigrations = DatabaseMigrations()
 let jobQueue = await JobQueue(
     .postgres(
         client: postgresClient,

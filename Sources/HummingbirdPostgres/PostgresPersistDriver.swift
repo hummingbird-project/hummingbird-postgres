@@ -16,6 +16,7 @@ import AsyncAlgorithms
 import Foundation
 import Hummingbird
 import NIOCore
+import PostgresMigrations
 import PostgresNIO
 
 extension PSQLError {
@@ -62,15 +63,15 @@ public final class PostgresPersistDriver: PersistDriver {
     let client: PostgresClient
     let logger: Logger
     let tidyUpFrequency: Duration
-    let migrations: PostgresMigrations
+    let migrations: DatabaseMigrations
 
     /// Initialize PostgresPersistDriver
     /// - Parameters:
     ///   - client: Postgres client
-    ///   - migrations: Migrations array to add persist migrations
+    ///   - migrations: DatabaseMigrations array to add persist migrations
     ///   - tidyUpFrequency: How frequently cleanup expired database entries should occur
     ///   - logger: Logger used by persist
-    public init(client: PostgresClient, migrations: PostgresMigrations, tidyUpFrequency: Duration = .seconds(600), logger: Logger) async {
+    public init(client: PostgresClient, migrations: DatabaseMigrations, tidyUpFrequency: Duration = .seconds(600), logger: Logger) async {
         self.client = client
         self.logger = logger
         self.tidyUpFrequency = tidyUpFrequency

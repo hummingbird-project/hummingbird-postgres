@@ -12,11 +12,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-import HummingbirdPostgres
 import Logging
+import PostgresMigrations
 import PostgresNIO
 
-struct CreateJobQueue: PostgresMigration {
+struct CreateJobQueue: DatabaseMigration {
     func apply(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
             """
@@ -44,5 +44,5 @@ struct CreateJobQueue: PostgresMigration {
     }
 
     var name: String { "_Create_JobQueue_Table_" }
-    var group: PostgresMigrationGroup { .jobQueue }
+    var group: DatabaseMigrationGroup { .jobQueue }
 }

@@ -16,18 +16,18 @@ import Logging
 import PostgresNIO
 
 /// Database migration support
-public actor PostgresMigrations {
+public actor DatabaseMigrations {
     enum State {
         case waiting([CheckedContinuation<Void, Error>])
         case completed
         case failed(Error)
     }
 
-    var migrations: [PostgresMigration]
-    var reverts: [String: PostgresMigration]
+    var migrations: [DatabaseMigration]
+    var reverts: [String: DatabaseMigration]
     var state: State
 
-    /// Initialize a PostgresMigrations object
+    /// Initialize a DatabaseMigrations object
     public init() {
         self.migrations = []
         self.reverts = [:]
@@ -35,16 +35,16 @@ public actor PostgresMigrations {
     }
 
     /// Add migration to list of migrations to be be applied
-    /// - Parameter migration: Migration to be applied
-    public func add(_ migration: PostgresMigration) {
+    /// - Parameter migration: DatabaseMigration to be applied
+    public func add(_ migration: DatabaseMigration) {
         self.migrations.append(migration)
     }
 
     /// Register migration without it being applied
     ///
     /// This is useful for migrations you might have to revert.
-    /// - Parameter migration: Migration to be registerd
-    public func register(_ migration: PostgresMigration) {
+    /// - Parameter migration: DatabaseMigration to be registerd
+    public func register(_ migration: DatabaseMigration) {
         self.reverts[migration.name] = migration
     }
 
@@ -68,7 +68,7 @@ public actor PostgresMigrations {
     ///   - dryRun: Should migrations actually be applied, or should we just report what would be applied and reverted
     public func apply(
         client: PostgresClient,
-        groups: [PostgresMigrationGroup] = [],
+        groups: [DatabaseMigrationGroup] = [],
         logger: Logger,
         dryRun: Bool
     ) async throws {
@@ -88,7 +88,7 @@ public actor PostgresMigrations {
     ///   - dryRun: Should migrations actually be reverted, or should we just report what would be reverted
     public func revert(
         client: PostgresClient,
-        groups: [PostgresMigrationGroup] = [],
+        groups: [DatabaseMigrationGroup] = [],
         logger: Logger,
         dryRun: Bool
     ) async throws {
@@ -100,8 +100,8 @@ public actor PostgresMigrations {
 
     private func migrate(
         client: PostgresClient,
-        migrations: [PostgresMigration],
-        groups: [PostgresMigrationGroup],
+        migrations: [DatabaseMigration],
+        groups: [DatabaseMigrationGroup],
         logger: Logger,
         completeMigrations: Bool,
         dryRun: Bool
@@ -260,26 +260,26 @@ struct PostgresMigrationRepository: Sendable {
         try await self.createMigrationsTable(connection: context.connection, logger: context.logger)
     }
 
-    func add(_ migration: PostgresMigration, context: Context) async throws {
+    func add(_ migration: DatabaseMigration, context: Context) async throws {
         try await context.connection.query(
             "INSERT INTO _hb_pg_migrations (\"name\", \"group\") VALUES (\(migration.name), \(migration.group.name))",
             logger: context.logger
         )
     }
 
-    func remove(_ migration: PostgresMigration, context: Context) async throws {
+    func remove(_ migration: DatabaseMigration, context: Context) async throws {
         try await context.connection.query(
             "DELETE FROM _hb_pg_migrations WHERE name = \(migration.name)",
             logger: context.logger
         )
     }
 
-    func getAll(context: Context) async throws -> [(name: String, group: PostgresMigrationGroup)] {
+    func getAll(context: Context) async throws -> [(name: String, group: DatabaseMigrationGroup)] {
         let stream = try await context.connection.query(
             "SELECT \"name\", \"group\" FROM _hb_pg_migrations ORDER BY \"order\"",
             logger: context.logger
         )
-        var result: [(String, PostgresMigrationGroup)] = []
+        var result: [(String, DatabaseMigrationGroup)] = []
         for try await (name, group) in stream.decode((String, String).self, context: .default) {
             result.append((name, .init(group)))
         }
