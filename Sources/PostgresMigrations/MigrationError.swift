@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 ///  Error thrown by migration code
-public struct PostgresMigrationError: Error, Equatable {
+public struct DatabaseMigrationError: Error, Equatable {
     enum _Internal {
         case requiresChanges
         case cannotRevertMigration
@@ -32,7 +32,7 @@ public struct PostgresMigrationError: Error, Equatable {
     public static var cannotRevertMigration: Self { .init(.cannotRevertMigration) }
 }
 
-extension PostgresMigrationError: CustomStringConvertible {
+extension DatabaseMigrationError: CustomStringConvertible {
     public var description: String {
         switch self.value {
         case .requiresChanges: "Database requires changes. Run `migrate` with `dryRun` set to false."

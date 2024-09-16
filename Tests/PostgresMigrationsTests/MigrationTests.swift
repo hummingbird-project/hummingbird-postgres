@@ -231,7 +231,7 @@ final class MigrationTests: XCTestCase {
                 try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: true)
             }
             XCTFail("Shouldn't get here")
-        } catch let error as PostgresMigrationError where error == .requiresChanges {}
+        } catch let error as DatabaseMigrationError where error == .requiresChanges {}
         try await self.testMigrations(groups: [.default, .test]) { migrations in
             await migrations.add(TestMigration(name: "test1"))
             await migrations.add(TestMigration(name: "test2"))

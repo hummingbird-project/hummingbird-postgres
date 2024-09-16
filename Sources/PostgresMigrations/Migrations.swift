@@ -154,7 +154,7 @@ public actor DatabaseMigrations {
                         guard let migration = registeredMigrations[migrationName]
                         else {
                             logger.error("Failed to find migration \(migrationName)")
-                            throw PostgresMigrationError.cannotRevertMigration
+                            throw DatabaseMigrationError.cannotRevertMigration
                         }
                         logger.info("Reverting \(migrationName) from group \(group.name) \(dryRun ? " (dry run)" : "")")
                         if !dryRun {
@@ -185,7 +185,7 @@ public actor DatabaseMigrations {
                 }
                 // if changes are required
                 guard requiresChanges == false else {
-                    throw PostgresMigrationError.requiresChanges
+                    throw DatabaseMigrationError.requiresChanges
                 }
             }
         } catch {
