@@ -9,11 +9,9 @@ let package = Package(
     products: [
         .library(name: "HummingbirdPostgres", targets: ["HummingbirdPostgres"]),
         .library(name: "PostgresMigrations", targets: ["PostgresMigrations"]),
-        .library(name: "JobsPostgres", targets: ["JobsPostgres"]),
     ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0"),
-        .package(url: "https://github.com/hummingbird-project/swift-jobs.git", branch: "main"),
         .package(url: "https://github.com/vapor/postgres-nio", from: "1.21.0"),
     ],
     targets: [
@@ -31,14 +29,6 @@ let package = Package(
                 .product(name: "PostgresNIO", package: "postgres-nio"),
             ]
         ),
-        .target(
-            name: "JobsPostgres",
-            dependencies: [
-                "PostgresMigrations",
-                .product(name: "Jobs", package: "swift-jobs"),
-                .product(name: "PostgresNIO", package: "postgres-nio"),
-            ]
-        ),
         .testTarget(
             name: "HummingbirdPostgresTests",
             dependencies: [
@@ -50,12 +40,6 @@ let package = Package(
             name: "PostgresMigrationsTests",
             dependencies: [
                 "PostgresMigrations",
-            ]
-        ),
-        .testTarget(
-            name: "JobsPostgresTests",
-            dependencies: [
-                "JobsPostgres",
             ]
         ),
     ]
