@@ -30,11 +30,11 @@ extension PSQLError {
 
 /// Postgres driver for persist system for storing persistent cross request key/value pairs
 ///
-/// The Postgres driver uses the database migration service ``PostgresMigrations`` to
+/// The Postgres driver uses the database migration service ``/PostgresMigrations/DatabaseMigrations`` to
 /// create its database table. Before the server is running you should run the migrations
 /// to build your table.
 /// ```
-/// let migrations = PostgresMigrations()
+/// let migrations = DatabaseMigrations()
 /// let persist = PostgresPersistDriver(client: postgresClient, migrations: migrations)
 /// var app = Application(...)
 /// app.runBeforeServerStart {
@@ -68,7 +68,7 @@ public final class PostgresPersistDriver: PersistDriver {
     /// Initialize PostgresPersistDriver
     /// - Parameters:
     ///   - client: Postgres client
-    ///   - migrations: DatabaseMigrations array to add persist migrations
+    ///   - migrations: ``/PostgresMigrations/DatabaseMigrations`` array to add persist migrations
     ///   - tidyUpFrequency: How frequently cleanup expired database entries should occur
     ///   - logger: Logger used by persist
     public init(client: PostgresClient, migrations: DatabaseMigrations, tidyUpFrequency: Duration = .seconds(600), logger: Logger) async {
