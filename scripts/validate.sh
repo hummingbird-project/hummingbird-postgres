@@ -15,6 +15,7 @@
 
 SWIFT_FORMAT_VERSION=0.53.10
 
+
 set -eu
 here="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
