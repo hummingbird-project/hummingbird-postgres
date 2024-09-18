@@ -1,6 +1,19 @@
 #!/bin/bash
 ##===----------------------------------------------------------------------===##
 ##
+## This source file is part of the Hummingbird server framework project
+##
+## Copyright (c) 2021-2024 the Hummingbird authors
+## Licensed under Apache License v2.0
+##
+## See LICENSE.txt for license information
+## See hummingbird/CONTRIBUTORS.txt for the list of Hummingbird authors
+##
+## SPDX-License-Identifier: Apache-2.0
+##
+##===----------------------------------------------------------------------===##
+##===----------------------------------------------------------------------===##
+##
 ## This source file is part of the SwiftNIO open source project
 ##
 ## Copyright (c) 2017-2019 Apple Inc. and the SwiftNIO project authors
@@ -13,7 +26,7 @@
 ##
 ##===----------------------------------------------------------------------===##
 
-SWIFT_FORMAT_VERSION=0.51.15
+SWIFT_FORMAT_VERSION=0.53.10
 
 set -eu
 here="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
