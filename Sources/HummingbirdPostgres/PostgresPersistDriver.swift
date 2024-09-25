@@ -98,15 +98,27 @@ public final class PostgresPersistDriver: PersistDriver {
 
     /// Set value for key.
     public func set(key: String, value: some Codable, expires: Duration?) async throws {
-        let expires = expires.map { Date.now + Double($0.components.seconds) } ?? Date.distantFuture
-        try await self.client.query(
-            """
-            INSERT INTO _hb_pg_persist (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(expires))
-            ON CONFLICT (id)
-            DO UPDATE SET data = \(WrapperObject(value)), expires = \(expires)
-            """,
-            logger: self.logger
-        )
+        if let expires {
+            let expires = Date.now + Double(expires.components.seconds)
+            try await self.client.query(
+                """
+                INSERT INTO _hb_pg_persist (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(expires))
+                ON CONFLICT (id)
+                DO UPDATE SET data = \(WrapperObject(value)), expires = \(expires)
+                """,
+                logger: self.logger
+            )
+
+        } else {
+            try await self.client.query(
+                """
+                INSERT INTO _hb_pg_persist (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(Date.distantFuture))
+                ON CONFLICT (id)
+                DO UPDATE SET data = \(WrapperObject(value))
+                """,
+                logger: self.logger
+            )
+        }
     }
 
     /// Get value for key
