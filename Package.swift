@@ -46,5 +46,6 @@ let package = Package(
                 "PostgresMigrations",
             ]
         ),
-    ]
+    ],
+    swiftLanguageMode: [.v5, .version(6)]
 )
