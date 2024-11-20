@@ -35,7 +35,11 @@ extension PSQLError {
 /// to build your table.
 /// ```
 /// let migrations = DatabaseMigrations()
-/// let persist = PostgresPersistDriver(client: postgresClient, migrations: migrations)
+/// let persist = PostgresPersistDriver(
+///     client: postgresClient,
+///     migrations: migrations,
+///     logger: logger
+/// )
 /// var app = Application(...)
 /// app.runBeforeServerStart {
 ///     try await migrations.apply(client: postgresClient, logger: logger, dryRun: applyMigrations)
@@ -127,13 +131,17 @@ public final class PostgresPersistDriver: PersistDriver {
             "SELECT data, expires FROM _hb_pg_persist WHERE id = \(key)",
             logger: self.logger
         )
-        guard let (object, expires) = try await stream.decode((WrapperObject<Object>, Date).self)
-            .first(where: { _ in true })
-        else {
-            return nil
+        do {
+            guard let (object, expires) = try await stream.decode((WrapperObject<Object>, Date).self)
+                .first(where: { _ in true })
+            else {
+                return nil
+            }
+            guard expires > .now else { return nil }
+            return object.value
+        } catch is DecodingError {
+            throw PersistError.invalidConversion
         }
-        guard expires > .now else { return nil }
-        return object.value
     }
 
     /// Remove key
