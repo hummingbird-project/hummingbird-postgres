@@ -36,7 +36,8 @@ extension DatabaseMigrationError: CustomStringConvertible {
     public var description: String {
         switch self.value {
         case .requiresChanges: "Database requires changes. Run `migrate` with `dryRun` set to false."
-        case .cannotRevertMigration: "Cannot revert migration because we don't have its details. Use `PostgresMigrations.register` to register the DatabaseMigration."
+        case .cannotRevertMigration:
+            "Cannot revert migration because we don't have its details. Use `PostgresMigrations.register` to register the DatabaseMigration."
         }
     }
 }

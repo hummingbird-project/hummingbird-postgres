@@ -1,12 +1,13 @@
 import Atomics
 import Foundation
 import Logging
-@testable import PostgresMigrations
 import PostgresNIO
 import XCTest
 
+@testable import PostgresMigrations
+
 func getPostgresConfiguration() async throws -> PostgresClient.Configuration {
-    return .init(
+    .init(
         host: ProcessInfo.processInfo.environment["POSTGRES_HOSTNAME"] ?? "localhost",
         port: 5432,
         username: ProcessInfo.processInfo.environment["POSTGRES_USER"] ?? "test_user",
@@ -109,7 +110,7 @@ final class MigrationTests: XCTestCase {
         let repository = PostgresMigrationRepository(client: client)
         return try await repository.withContext(logger: Self.logger) { context in
             try await repository.getAll(context: context).compactMap { migration in
-                if groups.first(where: { group in return group == migration.group }) != nil {
+                if groups.first(where: { group in group == migration.group }) != nil {
                     return migration.name
                 } else {
                     return nil

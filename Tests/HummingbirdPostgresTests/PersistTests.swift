@@ -34,7 +34,9 @@ func getPostgresConfiguration() async throws -> PostgresClient.Configuration {
 }
 
 final class PersistTests: XCTestCase {
-    static func createApplication(_ updateRouter: (Router<BasicRequestContext>, PersistDriver) -> Void = { _, _ in }) async throws -> some ApplicationProtocol {
+    static func createApplication(
+        _ updateRouter: (Router<BasicRequestContext>, PersistDriver) -> Void = { _, _ in }
+    ) async throws -> some ApplicationProtocol {
         struct PostgresErrorMiddleware<Context: RequestContext>: RouterMiddleware {
             func handle(_ request: Request, context: Context, next: (Request, Context) async throws -> Response) async throws -> Response {
                 do {

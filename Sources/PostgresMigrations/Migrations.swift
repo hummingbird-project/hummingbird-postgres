@@ -75,8 +75,12 @@ public actor DatabaseMigrations {
         // wait a small period to ensure the PostgresClient has started up
         try await Task.sleep(for: .microseconds(100))
         try await self.migrate(
-            client: client, migrations: self.migrations, groups: groups, logger: logger,
-            completeMigrations: true, dryRun: dryRun
+            client: client,
+            migrations: self.migrations,
+            groups: groups,
+            logger: logger,
+            completeMigrations: true,
+            dryRun: dryRun
         )
     }
 
@@ -93,8 +97,12 @@ public actor DatabaseMigrations {
         dryRun: Bool
     ) async throws {
         try await self.migrate(
-            client: client, migrations: [], groups: groups, logger: logger,
-            completeMigrations: false, dryRun: dryRun
+            client: client,
+            migrations: [],
+            groups: groups,
+            logger: logger,
+            completeMigrations: false,
+            dryRun: dryRun
         )
     }
 
@@ -132,8 +140,8 @@ public actor DatabaseMigrations {
                 // list of groups from migrations and applied migrations
                 let groups =
                     groups.count == 0
-                        ? (migrations.map(\.group) + appliedMigrations.map(\.group)).uniqueElements
-                        : groups
+                    ? (migrations.map(\.group) + appliedMigrations.map(\.group)).uniqueElements
+                    : groups
                 // for each group apply/revert migrations
                 for group in groups {
                     let groupMigrations = migrations.filter { $0.group == group }
@@ -143,7 +151,7 @@ public actor DatabaseMigrations {
                     var i = 0
                     // while migrations and applied migrations are the same
                     while i < minMigrationCount,
-                          appliedGroupMigrations[i].name == groupMigrations[i].name
+                        appliedGroupMigrations[i].name == groupMigrations[i].name
                     {
                         i += 1
                     }
@@ -175,7 +183,8 @@ public actor DatabaseMigrations {
                         )
                         if !dryRun {
                             try await migration.apply(
-                                connection: context.connection, logger: context.logger
+                                connection: context.connection,
+                                logger: context.logger
                             )
                             try await repository.add(migration, context: context)
                         } else {
