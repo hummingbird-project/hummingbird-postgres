@@ -29,7 +29,7 @@ let package = Package(
         .target(
             name: "PostgresMigrations",
             dependencies: [
-                .product(name: "PostgresNIO", package: "postgres-nio"),
+                .product(name: "PostgresNIO", package: "postgres-nio")
             ],
             swiftSettings: swiftSettings
         ),
@@ -43,7 +43,7 @@ let package = Package(
         .testTarget(
             name: "PostgresMigrationsTests",
             dependencies: [
-                "PostgresMigrations",
+                "PostgresMigrations"
             ]
         ),
     ],

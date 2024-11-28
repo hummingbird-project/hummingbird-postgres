@@ -132,8 +132,9 @@ public final class PostgresPersistDriver: PersistDriver {
             logger: self.logger
         )
         do {
-            guard let (object, expires) = try await stream.decode((WrapperObject<Object>, Date).self)
-                .first(where: { _ in true })
+            guard
+                let (object, expires) = try await stream.decode((WrapperObject<Object>, Date).self)
+                    .first(where: { _ in true })
             else {
                 return nil
             }
