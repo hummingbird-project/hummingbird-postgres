@@ -18,8 +18,21 @@ func getPostgresConfiguration() async throws -> PostgresClient.Configuration {
 }
 
 final class MigrationTests: XCTestCase {
-    /// Test migration used to verify order or apply and reverts
+    /// Migration you can set name and group of
     struct TestMigration: DatabaseMigration {
+        init(name: String, group: DatabaseMigrationGroup = .default) {
+            self.name = name
+            self.group = group
+        }
+
+        func apply(connection: PostgresConnection, logger: Logger) async throws {}
+        func revert(connection: PostgresConnection, logger: Logger) async throws {}
+
+        let name: String
+        let group: DatabaseMigrationGroup
+    }
+    /// Test migration used to verify order or apply and reverts
+    struct TestOrderMigration: DatabaseMigration {
         final class Order: Sendable {
             let value: ManagedAtomic<Int>
 
@@ -122,10 +135,10 @@ final class MigrationTests: XCTestCase {
     // MARK: Tests
 
     func testMigrate() async throws {
-        let order = TestMigration.Order()
+        let order = TestOrderMigration.Order()
         try await self.testMigrations { migrations in
-            await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1))
-            await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2))
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
             order.expect(3)
@@ -137,10 +150,10 @@ final class MigrationTests: XCTestCase {
     }
 
     func testRevert() async throws {
-        let order = TestMigration.Order()
+        let order = TestOrderMigration.Order()
         try await self.testMigrations { migrations in
-            await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1, revertOrder: 4))
-            await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2, revertOrder: 3))
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1, revertOrder: 4))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2, revertOrder: 3))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
             try await migrations.revert(client: client, groups: [.default], logger: Self.logger, dryRun: false)
@@ -151,18 +164,18 @@ final class MigrationTests: XCTestCase {
     }
 
     func testSecondMigrate() async throws {
-        let order = TestMigration.Order()
+        let order = TestOrderMigration.Order()
         try await self.testMigrations(revert: false) { migrations in
-            await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1))
-            await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2))
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
         }
         try await self.testMigrations { migrations in
-            await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1))
-            await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2))
-            await migrations.add(TestMigration(name: "test3", order: order, applyOrder: 3))
-            await migrations.add(TestMigration(name: "test4", order: order, applyOrder: 4))
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2))
+            await migrations.add(TestOrderMigration(name: "test3", order: order, applyOrder: 3))
+            await migrations.add(TestOrderMigration(name: "test4", order: order, applyOrder: 4))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
             let migrations = try await getAll(client: client)
@@ -176,18 +189,18 @@ final class MigrationTests: XCTestCase {
     }
 
     func testRemoveMigration() async throws {
-        let order = TestMigration.Order()
+        let order = TestOrderMigration.Order()
         try await self.testMigrations(revert: false) { migrations in
-            await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1))
-            await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2))
-            await migrations.add(TestMigration(name: "test3", order: order, applyOrder: 3))
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2))
+            await migrations.add(TestOrderMigration(name: "test3", order: order, applyOrder: 3))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
         }
         try await self.testMigrations { migrations in
-            await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1))
-            await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2))
-            await migrations.register(TestMigration(name: "test3", order: order, applyOrder: 3, revertOrder: 4))
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2))
+            await migrations.register(TestOrderMigration(name: "test3", order: order, applyOrder: 3, revertOrder: 4))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
             let migrations = try await getAll(client: client)
@@ -199,19 +212,19 @@ final class MigrationTests: XCTestCase {
     }
 
     func testReplaceMigration() async throws {
-        let order = TestMigration.Order()
+        let order = TestOrderMigration.Order()
         try await self.testMigrations(revert: false) { migrations in
-            await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1))
-            await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2))
-            await migrations.add(TestMigration(name: "test3", order: order, applyOrder: 3))
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2))
+            await migrations.add(TestOrderMigration(name: "test3", order: order, applyOrder: 3))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
         }
         try await self.testMigrations { migrations in
-            await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1))
-            await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2))
-            await migrations.add(TestMigration(name: "test4", order: order, applyOrder: 5))
-            await migrations.register(TestMigration(name: "test3", order: order, applyOrder: 3, revertOrder: 4))
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2))
+            await migrations.add(TestOrderMigration(name: "test4", order: order, applyOrder: 5))
+            await migrations.register(TestOrderMigration(name: "test3", order: order, applyOrder: 3, revertOrder: 4))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
             let migrations = try await getAll(client: client)
@@ -226,16 +239,16 @@ final class MigrationTests: XCTestCase {
     func testDryRun() async throws {
         do {
             try await self.testMigrations(groups: [.default, .test]) { migrations in
-                await migrations.add(TestMigration(name: "test1"))
-                await migrations.add(TestMigration(name: "test2"))
+                await migrations.add(TestOrderMigration(name: "test1"))
+                await migrations.add(TestOrderMigration(name: "test2"))
             } verify: { migrations, client in
                 try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: true)
             }
             XCTFail("Shouldn't get here")
         } catch let error as DatabaseMigrationError where error == .requiresChanges {}
         try await self.testMigrations(groups: [.default, .test]) { migrations in
-            await migrations.add(TestMigration(name: "test1"))
-            await migrations.add(TestMigration(name: "test2"))
+            await migrations.add(TestOrderMigration(name: "test1"))
+            await migrations.add(TestOrderMigration(name: "test2"))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
             try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: true)
@@ -243,10 +256,10 @@ final class MigrationTests: XCTestCase {
     }
 
     func testGroups() async throws {
-        let order = TestMigration.Order()
+        let order = TestOrderMigration.Order()
         try await self.testMigrations(groups: [.default, .test]) { migrations in
-            await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1, group: .default))
-            await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2, group: .test))
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1, group: .default))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2, group: .test))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default, .test], logger: Self.logger, dryRun: false)
             order.expect(3)
@@ -258,11 +271,11 @@ final class MigrationTests: XCTestCase {
     }
 
     func testAddingToGroup() async throws {
-        let order = TestMigration.Order()
+        let order = TestOrderMigration.Order()
         // Add two migrations from different groups
         try await self.testMigrations(revert: false, groups: [.default, .test]) { migrations in
-            await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1, group: .default))
-            await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2, group: .test))
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1, group: .default))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2, group: .test))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default, .test], logger: Self.logger, dryRun: false)
             let migrations = try await getAll(client: client, groups: [.default, .test])
@@ -271,9 +284,9 @@ final class MigrationTests: XCTestCase {
         }
         // Add additional migration to default group before the migration from the test group
         try await self.testMigrations(groups: [.default, .test]) { migrations in
-            await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1, group: .default))
-            await migrations.add(TestMigration(name: "test1_2", order: order, applyOrder: 3, group: .default))
-            await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2, group: .test))
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1, group: .default))
+            await migrations.add(TestOrderMigration(name: "test1_2", order: order, applyOrder: 3, group: .default))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2, group: .test))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default, .test], logger: Self.logger, dryRun: false)
             let migrations = try await getAll(client: client, groups: [.default, .test])
@@ -285,12 +298,12 @@ final class MigrationTests: XCTestCase {
     }
 
     func testRemovingFromGroup() async throws {
-        let order = TestMigration.Order()
+        let order = TestOrderMigration.Order()
         // Add two migrations from different groups
         try await self.testMigrations(revert: false, groups: [.default, .test]) { migrations in
-            await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1, group: .default))
-            await migrations.add(TestMigration(name: "test1_2", order: order, applyOrder: 2, group: .default))
-            await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 3, group: .test))
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1, group: .default))
+            await migrations.add(TestOrderMigration(name: "test1_2", order: order, applyOrder: 2, group: .default))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 3, group: .test))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default, .test], logger: Self.logger, dryRun: false)
             let migrations = try await getAll(client: client, groups: [.default, .test])
@@ -300,9 +313,9 @@ final class MigrationTests: XCTestCase {
         }
         // Remove migration from default group before the migration from the test group
         try await self.testMigrations(groups: [.default, .test]) { migrations in
-            await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1, group: .default))
-            await migrations.register(TestMigration(name: "test1_2", order: order, revertOrder: 4, group: .default))
-            await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2, group: .test))
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1, group: .default))
+            await migrations.register(TestOrderMigration(name: "test1_2", order: order, revertOrder: 4, group: .default))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2, group: .test))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default, .test], logger: Self.logger, dryRun: false)
             let migrations = try await getAll(client: client, groups: [.default, .test])
@@ -313,11 +326,11 @@ final class MigrationTests: XCTestCase {
     }
 
     func testGroupsIgnoreOtherGroups() async throws {
-        let order = TestMigration.Order()
+        let order = TestOrderMigration.Order()
         // Add two migrations from different groups
         try await self.testMigrations(revert: false, groups: [.default, .test]) { migrations in
-            await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1, group: .default))
-            await migrations.add(TestMigration(name: "test2", order: order, applyOrder: 2, group: .test))
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1, group: .default))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2, group: .test))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default, .test], logger: Self.logger, dryRun: false)
             let migrations = try await getAll(client: client, groups: [.default, .test])
@@ -327,7 +340,7 @@ final class MigrationTests: XCTestCase {
         }
         // Only add the migration from the first group, but also only process the first group
         try await self.testMigrations(groups: [.default]) { migrations in
-            await migrations.add(TestMigration(name: "test1", order: order, applyOrder: 1, revertOrder: 3, group: .default))
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1, revertOrder: 3, group: .default))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
             let migrations = try await getAll(client: client, groups: [.default, .test])
@@ -336,7 +349,7 @@ final class MigrationTests: XCTestCase {
             XCTAssertEqual(migrations[1], "test2")
         }
         try await self.testMigrations(groups: [.default, .test]) { migrations in
-            await migrations.register(TestMigration(name: "test2", order: order, applyOrder: 2, revertOrder: 4, group: .test))
+            await migrations.register(TestOrderMigration(name: "test2", order: order, applyOrder: 2, revertOrder: 4, group: .test))
         } verify: { _, _ in
         }
         order.expect(5)
@@ -346,6 +359,33 @@ final class MigrationTests: XCTestCase {
         XCTAssertEqual([1, 4, 67, 2, 1, 1, 5, 4].uniqueElements, [1, 4, 67, 2, 5])
         XCTAssertEqual([1, 1, 1, 2, 2].uniqueElements, [1, 2])
         XCTAssertEqual([2, 1, 1, 1, 2, 2].uniqueElements, [2, 1])
+    }
+
+    /// Test we catch when migrations with duplicate names are added
+    func testDuplicateMigrations() async throws {
+        do {
+            try await self.testMigrations { migrations in
+                await migrations.add(TestMigration(name: "test1"))
+                await migrations.add(TestMigration(name: "test1"))
+            } verify: { migrations, client in
+                try await migrations.apply(client: client, groups: [.default, .test], logger: Self.logger, dryRun: true)
+            }
+            XCTFail("Duplicate migration names should throw an error")
+        } catch let error as DatabaseMigrationError where error == .dupicateNames {
+        } catch {
+            XCTFail("\(error)")
+        }
+    }
+
+    /// Test we don't error on migrations with the same name but in different groups
+    func testDuplicateMigrationsAcrossGroups() async throws {
+        try await self.testMigrations { migrations in
+            await migrations.add(TestMigration(name: "test1"))
+            await migrations.add(TestMigration(name: "test1", group: .test))
+            await migrations.add(TestMigration(name: "test2"))
+        } verify: { migrations, client in
+            try await migrations.apply(client: client, groups: [.default, .test], logger: Self.logger, dryRun: false)
+        }
     }
 }
 
