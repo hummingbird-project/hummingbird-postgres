@@ -72,6 +72,7 @@ public actor DatabaseMigrations {
         logger: Logger,
         dryRun: Bool
     ) async throws {
+        try checkForDuplicates(logger: logger)
         // wait a small period to ensure the PostgresClient has started up
         try await Task.sleep(for: .microseconds(100))
         try await self.migrate(
@@ -246,6 +247,28 @@ public actor DatabaseMigrations {
             preconditionFailure("Cannot set it has failed after having set it has completed")
         case .failed(let error):
             self.state = .failed(error)
+        }
+    }
+
+    /// verify migration list doesnt have duplicates
+    func checkForDuplicates(logger: Logger) throws {
+        var foundDuplicates = false
+        let groups = migrations.map(\.group).uniqueElements
+        for group in groups {
+            let groupMigrations = self.migrations.filter { $0.group == group }
+            let groupMigrationSet = Set(groupMigrations.map(\.name))
+            guard groupMigrationSet.count != groupMigrations.count else {
+                continue
+            }
+            foundDuplicates = true
+            for index in 0..<groupMigrations.count {
+                if groupMigrations[(index + 1)...].first(where: { $0.name == groupMigrations[index].name }) != nil {
+                    logger.error("Database migration \(groupMigrations[index].name) has been added twice.")
+                }
+            }
+        }
+        if foundDuplicates {
+            throw DatabaseMigrationError.dupicateNames
         }
     }
 }

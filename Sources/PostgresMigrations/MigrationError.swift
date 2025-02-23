@@ -15,6 +15,7 @@
 ///  Error thrown by migration code
 public struct DatabaseMigrationError: Error, Equatable {
     enum _Internal {
+        case dupicateNames
         case requiresChanges
         case cannotRevertMigration
     }
@@ -25,6 +26,8 @@ public struct DatabaseMigrationError: Error, Equatable {
         self.value = value
     }
 
+    /// The migration list has duplicate names in it
+    public static var dupicateNames: Self { .init(.dupicateNames) }
     /// The database requires a migration before the application can run
     public static var requiresChanges: Self { .init(.requiresChanges) }
     /// Cannot revert a migration as we do not have its details. Add it to the revert list using
@@ -35,6 +38,7 @@ public struct DatabaseMigrationError: Error, Equatable {
 extension DatabaseMigrationError: CustomStringConvertible {
     public var description: String {
         switch self.value {
+        case .dupicateNames: "The migration list has duplicate names in it."
         case .requiresChanges: "Database requires changes. Run `migrate` with `dryRun` set to false."
         case .cannotRevertMigration:
             "Cannot revert migration because we don't have its details. Use `PostgresMigrations.register` to register the DatabaseMigration."
