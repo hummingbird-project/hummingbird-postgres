@@ -87,7 +87,9 @@ final class MigrationTests: XCTestCase {
         revert: Bool = true,
         groups: [DatabaseMigrationGroup] = [.default],
         _ setup: (DatabaseMigrations) async throws -> Void,
-        verify: (DatabaseMigrations, PostgresClient) async throws -> Void
+        verify: (DatabaseMigrations, PostgresClient) async throws -> Void,
+        file: StaticString = #filePath,
+        line: UInt = #line
     ) async throws {
         let logger = {
             var logger = Logger(label: "MigrationTests")
@@ -115,7 +117,7 @@ final class MigrationTests: XCTestCase {
                 group.cancelAll()
             }
         } catch let error as PSQLError {
-            XCTFail("\(String(reflecting: error))")
+            XCTFail("\(String(reflecting: error))", file: file, line: line)
         }
     }
 
@@ -197,17 +199,16 @@ final class MigrationTests: XCTestCase {
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
         }
-        try await self.testMigrations { migrations in
-            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
-            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2))
-            await migrations.register(TestOrderMigration(name: "test3", order: order, applyOrder: 3, revertOrder: 4))
-        } verify: { migrations, client in
-            try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
-            let migrations = try await getAll(client: client)
-            order.expect(5)
-            XCTAssertEqual(migrations.count, 2)
-            XCTAssertEqual(migrations[0], "test1")
-            XCTAssertEqual(migrations[1], "test2")
+        do {
+            try await self.testMigrations { migrations in
+                await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
+                await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2))
+                await migrations.register(TestOrderMigration(name: "test3", order: order, applyOrder: 3, revertOrder: 4))
+            } verify: { migrations, client in
+                try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
+                XCTFail("Applying migrations should fail as a migration has been removed")
+            }
+        } catch let error as DatabaseMigrationError where error == .appliedMigrationsInconsistent {
         }
     }
 
@@ -220,20 +221,42 @@ final class MigrationTests: XCTestCase {
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
         }
+        do {
+            try await self.testMigrations { migrations in
+                await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
+                await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2))
+                await migrations.add(TestOrderMigration(name: "test4", order: order, applyOrder: 5))
+                await migrations.register(TestOrderMigration(name: "test3", order: order, applyOrder: 3, revertOrder: 4))
+            } verify: { migrations, client in
+                try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
+                XCTFail("Applying migrations should fail as a migration has been replaced")
+            }
+        } catch let error as DatabaseMigrationError where error == .appliedMigrationsInconsistent {
+        }
+    }
+
+    func testRevertInconsistent() async throws {
+        let order = TestOrderMigration.Order()
+        try await self.testMigrations(revert: false) { migrations in
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
+            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2))
+            await migrations.add(TestOrderMigration(name: "test3", order: order, applyOrder: 3))
+        } verify: { migrations, client in
+            try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
+        }
+
         try await self.testMigrations { migrations in
             await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
             await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2))
-            await migrations.add(TestOrderMigration(name: "test4", order: order, applyOrder: 5))
             await migrations.register(TestOrderMigration(name: "test3", order: order, applyOrder: 3, revertOrder: 4))
         } verify: { migrations, client in
-            try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
+            try await migrations.revertInconsistent(client: client, groups: [.default], logger: Self.logger, dryRun: false)
             let migrations = try await getAll(client: client)
-            order.expect(6)
-            XCTAssertEqual(migrations.count, 3)
+            XCTAssertEqual(migrations.count, 2)
             XCTAssertEqual(migrations[0], "test1")
             XCTAssertEqual(migrations[1], "test2")
-            XCTAssertEqual(migrations[2], "test4")
         }
+
     }
 
     func testDryRun() async throws {
@@ -312,17 +335,18 @@ final class MigrationTests: XCTestCase {
             XCTAssertEqual(migrations[2], "test2")
         }
         // Remove migration from default group before the migration from the test group
-        try await self.testMigrations(groups: [.default, .test]) { migrations in
-            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1, group: .default))
-            await migrations.register(TestOrderMigration(name: "test1_2", order: order, revertOrder: 4, group: .default))
-            await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2, group: .test))
-        } verify: { migrations, client in
-            try await migrations.apply(client: client, groups: [.default, .test], logger: Self.logger, dryRun: false)
-            let migrations = try await getAll(client: client, groups: [.default, .test])
-            XCTAssertEqual(migrations.count, 2)
-            XCTAssertEqual(migrations[0], "test1")
-            XCTAssertEqual(migrations[1], "test2")
+        do {
+            try await self.testMigrations(groups: [.default, .test]) { migrations in
+                await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1, group: .default))
+                await migrations.register(TestOrderMigration(name: "test1_2", order: order, revertOrder: 4, group: .default))
+                await migrations.add(TestOrderMigration(name: "test2", order: order, applyOrder: 2, group: .test))
+            } verify: { migrations, client in
+                try await migrations.apply(client: client, groups: [.default, .test], logger: Self.logger, dryRun: false)
+                XCTFail("Applying migrations should fail as a migration has been removed")
+            }
+        } catch let error as DatabaseMigrationError where error == .appliedMigrationsInconsistent {
         }
+
     }
 
     func testGroupsIgnoreOtherGroups() async throws {
