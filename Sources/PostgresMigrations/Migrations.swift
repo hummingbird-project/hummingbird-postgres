@@ -400,16 +400,26 @@ struct PostgresMigrationRepository: Sendable {
     }
 
     let client: PostgresClient
-
+    #if compiler(>=6.0)
     func withContext<Value: Sendable>(
         logger: Logger,
         isolation: isolated (any Actor)? = #isolation,
-        _ process: sending (Context) async throws -> Value
+        _ process: (Context) async throws -> Value
     ) async throws -> Value {
         try await self.client.withConnection { connection in
             try await process(.init(connection: connection, logger: logger))
         }
     }
+    #else
+    func withContext<Value: Sendable>(
+        logger: Logger,
+        _ process: (Context) async throws -> Value
+    ) async throws -> Value {
+        try await self.client.withConnection { connection in
+            try await process(.init(connection: connection, logger: logger))
+        }
+    }
+    #endif
 
     func setup(context: Context) async throws {
         try await self.createMigrationsTable(connection: context.connection, logger: context.logger)
