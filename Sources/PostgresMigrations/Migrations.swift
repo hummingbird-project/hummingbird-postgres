@@ -77,7 +77,7 @@ public actor DatabaseMigrations {
         let migrations = self.migrations
         let repository = PostgresMigrationRepository(client: client)
         do {
-            _ = try await repository.withContext(logger: logger) { context in
+            _ = try await repository.withTransaction(logger: logger) { context in
                 // setup migration repository (create table)
                 try await repository.setup(context: context)
                 var requiresChanges = false
@@ -161,7 +161,7 @@ public actor DatabaseMigrations {
                 }
                 return registeredMigrations
             }()
-            _ = try await repository.withContext(logger: logger) { context in
+            _ = try await repository.withTransaction(logger: logger) { context in
                 // setup migration repository (create table)
                 try await repository.setup(context: context)
                 var requiresChanges = false
@@ -240,7 +240,7 @@ public actor DatabaseMigrations {
                 }
                 return registeredMigrations
             }()
-            _ = try await repository.withContext(logger: logger) { context in
+            _ = try await repository.withTransaction(logger: logger) { context in
                 // setup migration repository (create table)
                 try await repository.setup(context: context)
                 var requiresChanges = false
@@ -401,21 +401,21 @@ struct PostgresMigrationRepository: Sendable {
 
     let client: PostgresClient
     #if compiler(>=6.0)
-    func withContext<Value: Sendable>(
+    func withTransaction<Value: Sendable>(
         logger: Logger,
         isolation: isolated (any Actor)? = #isolation,
         _ process: (Context) async throws -> Value
     ) async throws -> Value {
-        try await self.client.withConnection { connection in
+        try await self.client.withTransaction(logger: logger) { connection in
             try await process(.init(connection: connection, logger: logger))
         }
     }
     #else
-    func withContext<Value: Sendable>(
+    func withTransaction<Value: Sendable>(
         logger: Logger,
         _ process: (Context) async throws -> Value
     ) async throws -> Value {
-        try await self.client.withConnection { connection in
+        try await self.client.withTransaction(logger: logger) { connection in
             try await process(.init(connection: connection, logger: logger))
         }
     }

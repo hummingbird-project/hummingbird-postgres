@@ -123,7 +123,7 @@ final class MigrationTests: XCTestCase {
 
     func getAll(client: PostgresClient, groups: [DatabaseMigrationGroup] = [.default]) async throws -> [String] {
         let repository = PostgresMigrationRepository(client: client)
-        return try await repository.withContext(logger: Self.logger) { context in
+        return try await repository.withTransaction(logger: Self.logger) { context in
             try await repository.getAll(context: context).compactMap { migration in
                 if groups.first(where: { group in group == migration.group }) != nil {
                     return migration.name
