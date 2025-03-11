@@ -77,56 +77,55 @@ public actor DatabaseMigrations {
         let migrations = self.migrations
         let repository = PostgresMigrationRepository(client: client)
         do {
-            _ = try await repository.withTransaction(logger: logger) { context in
-                // setup migration repository (create table)
-                try await repository.setup(context: context)
-                var requiresChanges = false
-                // get migrations currently applied in the order they were applied
-                let appliedMigrations = try await repository.getAll(context: context)
-                // if groups array passed in is empty then work out list of migration groups by combining
-                // list of groups from migrations and applied migrations
-                let groups =
-                    groups.count == 0
-                    ? (migrations.map(\.group) + appliedMigrations.map(\.group)).uniqueElements
-                    : groups
-                // for each group apply/revert migrations
-                for group in groups {
-                    let groupMigrations = migrations.filter { $0.group == group }
-                    let appliedGroupMigrations = appliedMigrations.filter { $0.group == group }
+            // setup migration repository (create table)
+            _ = try await repository.setup(client: client, logger: logger)
+            // get migrations currently applied in the order they were applied
+            let appliedMigrations = try await repository.getAll(client: client, logger: logger)
 
-                    let minMigrationCount = min(groupMigrations.count, appliedGroupMigrations.count)
-                    var i = 0
-                    // while migrations and applied migrations are the same
-                    while i < minMigrationCount,
-                        appliedGroupMigrations[i].name == groupMigrations[i].name
-                    {
-                        i += 1
-                    }
-                    guard i == appliedGroupMigrations.count else {
-                        logger.error("Applied migrations in \(group.name) group are inconsistent with migration list")
-                        printMigrationComparison(expected: groupMigrations.map(\.name), applied: appliedGroupMigrations.map(\.name), logger: logger)
-                        throw DatabaseMigrationError.appliedMigrationsInconsistent
-                    }
-                    // Apply migrations that have not been applied
-                    for j in i..<groupMigrations.count {
-                        let migration = groupMigrations[j]
-                        logger.info(
-                            "Migrating \(migration.name) from group \(group.name) \(dryRun ? " (dry run)" : "")"
-                        )
-                        if !dryRun {
-                            try await migration.apply(
-                                connection: context.connection,
-                                logger: context.logger
-                            )
-                            try await repository.add(migration, context: context)
-                        } else {
-                            requiresChanges = true
-                        }
-                    }
+            // if groups array passed in is empty then work out list of migration groups by combining
+            // list of groups from migrations and applied migrations
+            let groups =
+                groups.count == 0
+                ? (migrations.map(\.group) + appliedMigrations.map(\.group)).uniqueElements
+                : groups
+            var migrationsToApply: [DatabaseMigration] = .init()
+            // for each group apply/revert migrations
+            for group in groups {
+                let groupMigrations = migrations.filter { $0.group == group }
+                let appliedGroupMigrations = appliedMigrations.filter { $0.group == group }
+
+                let minMigrationCount = min(groupMigrations.count, appliedGroupMigrations.count)
+                var i = 0
+                // while migrations and applied migrations are the same
+                while i < minMigrationCount,
+                    appliedGroupMigrations[i].name == groupMigrations[i].name
+                {
+                    i += 1
                 }
-                // if changes are required
-                guard requiresChanges == false else {
+                guard i == appliedGroupMigrations.count else {
+                    logger.error("Applied migrations in \(group.name) group are inconsistent with migration list")
+                    printMigrationComparison(expected: groupMigrations.map(\.name), applied: appliedGroupMigrations.map(\.name), logger: logger)
+                    throw DatabaseMigrationError.appliedMigrationsInconsistent
+                }
+                // Add migrations that have not been applied to list
+                migrationsToApply.append(contentsOf: groupMigrations[i...])
+                for migration in migrationsToApply {
+                    logger.info("Migrating \(migration.name) from group \(group.name) \(dryRun ? " (dry run)" : "")")
+                }
+            }
+            if dryRun {
+                if migrationsToApply.count > 0 {
                     throw DatabaseMigrationError.requiresChanges
+                }
+            } else if migrationsToApply.count > 0 {
+                _ = try await repository.withTransaction(logger: logger) { context in
+                    for migration in migrationsToApply {
+                        try await migration.apply(
+                            connection: context.connection,
+                            logger: context.logger
+                        )
+                        try await repository.add(migration, context: context)
+                    }
                 }
             }
         } catch {
@@ -161,45 +160,48 @@ public actor DatabaseMigrations {
                 }
                 return registeredMigrations
             }()
-            _ = try await repository.withTransaction(logger: logger) { context in
-                // setup migration repository (create table)
-                try await repository.setup(context: context)
-                var requiresChanges = false
-                // get migrations currently applied in the order they were applied
-                let appliedMigrations = try await repository.getAll(context: context)
-                // if groups array passed in is empty then work out list of migration groups by combining
-                // list of groups from migrations and applied migrations
-                let groups =
-                    groups.count == 0
-                    ? (migrations.map(\.group) + appliedMigrations.map(\.group)).uniqueElements
-                    : groups
-                // for each group revert migrations
-                for group in groups {
-                    let appliedGroupMigrations = appliedMigrations.filter { $0.group == group }
-                    // Revert migrations in reverse
-                    for j in (0..<appliedGroupMigrations.count).reversed() {
-                        let migrationName = appliedGroupMigrations[j].name
-                        // look for migration to revert in registered migration list and revert dictionary.
-                        guard let migration = registeredMigrations[migrationName]
-                        else {
-                            logger.error("Failed to find migration \(migrationName)")
-                            throw DatabaseMigrationError.cannotRevertMigration
-                        }
-                        logger.info("Reverting \(migrationName) from group \(group.name) \(dryRun ? " (dry run)" : "")")
-                        if !dryRun {
-                            try await migration.revert(
-                                connection: context.connection,
-                                logger: context.logger
-                            )
-                            try await repository.remove(migration, context: context)
-                        } else {
-                            requiresChanges = true
-                        }
+
+            // setup migration repository (create table)
+            _ = try await repository.setup(client: client, logger: logger)
+            // get migrations currently applied in the order they were applied
+            let appliedMigrations = try await repository.getAll(client: client, logger: logger)
+
+            // if groups array passed in is empty then work out list of migration groups by combining
+            // list of groups from migrations and applied migrations
+            let groups =
+                groups.count == 0
+                ? (migrations.map(\.group) + appliedMigrations.map(\.group)).uniqueElements
+                : groups
+            var migrationsToRevert: [DatabaseMigration] = .init()
+            // for each group revert migrations
+            for group in groups {
+                let appliedGroupMigrations = appliedMigrations.filter { $0.group == group }
+                // Revert migrations in reverse
+                for j in (0..<appliedGroupMigrations.count).reversed() {
+                    let migrationName = appliedGroupMigrations[j].name
+                    // look for migration to revert in registered migration list and revert dictionary.
+                    guard let migration = registeredMigrations[migrationName]
+                    else {
+                        logger.error("Failed to find migration \(migrationName)")
+                        throw DatabaseMigrationError.cannotRevertMigration
                     }
+                    migrationsToRevert.append(migration)
+                    logger.info("Reverting \(migrationName) from group \(group.name) \(dryRun ? " (dry run)" : "")")
                 }
-                // if changes are required
-                guard requiresChanges == false else {
+            }
+            if dryRun {
+                if migrationsToRevert.count > 0 {
                     throw DatabaseMigrationError.requiresChanges
+                }
+            } else if migrationsToRevert.count > 0 {
+                _ = try await repository.withTransaction(logger: logger) { context in
+                    for migration in migrationsToRevert {
+                        try await migration.revert(
+                            connection: context.connection,
+                            logger: context.logger
+                        )
+                        try await repository.remove(migration, context: context)
+                    }
                 }
             }
         } catch {
@@ -240,55 +242,57 @@ public actor DatabaseMigrations {
                 }
                 return registeredMigrations
             }()
-            _ = try await repository.withTransaction(logger: logger) { context in
-                // setup migration repository (create table)
-                try await repository.setup(context: context)
-                var requiresChanges = false
-                // get migrations currently applied in the order they were applied
-                let appliedMigrations = try await repository.getAll(context: context)
-                // if groups array passed in is empty then work out list of migration groups by combining
-                // list of groups from migrations and applied migrations
-                let groups =
-                    groups.count == 0
-                    ? (migrations.map(\.group) + appliedMigrations.map(\.group)).uniqueElements
-                    : groups
-                // for each group revert migrations
-                for group in groups {
-                    let groupMigrations = migrations.filter { $0.group == group }
-                    let appliedGroupMigrations = appliedMigrations.filter { $0.group == group }
+            // setup migration repository (create table)
+            _ = try await repository.setup(client: client, logger: logger)
+            // get migrations currently applied in the order they were applied
+            let appliedMigrations = try await repository.getAll(client: client, logger: logger)
 
-                    let minMigrationCount = min(groupMigrations.count, appliedGroupMigrations.count)
-                    var i = 0
-                    // while migrations and applied migrations are the same
-                    while i < minMigrationCount,
-                        appliedGroupMigrations[i].name == groupMigrations[i].name
-                    {
-                        i += 1
-                    }
-                    // Revert migrations in reverse
-                    for j in (i..<appliedGroupMigrations.count).reversed() {
-                        let migrationName = appliedGroupMigrations[j].name
-                        // look for migration to revert in registered migration list and revert dictionary.
-                        guard let migration = registeredMigrations[migrationName]
-                        else {
-                            logger.error("Failed to find migration \(migrationName)")
-                            throw DatabaseMigrationError.cannotRevertMigration
-                        }
-                        logger.info("Reverting \(migrationName) from group \(group.name) \(dryRun ? " (dry run)" : "")")
-                        if !dryRun {
-                            try await migration.revert(
-                                connection: context.connection,
-                                logger: context.logger
-                            )
-                            try await repository.remove(migration, context: context)
-                        } else {
-                            requiresChanges = true
-                        }
-                    }
+            var migrationsToRevert: [DatabaseMigration] = .init()
+            // if groups array passed in is empty then work out list of migration groups by combining
+            // list of groups from migrations and applied migrations
+            let groups =
+                groups.count == 0
+                ? (migrations.map(\.group) + appliedMigrations.map(\.group)).uniqueElements
+                : groups
+            // for each group revert migrations
+            for group in groups {
+                let groupMigrations = migrations.filter { $0.group == group }
+                let appliedGroupMigrations = appliedMigrations.filter { $0.group == group }
+
+                let minMigrationCount = min(groupMigrations.count, appliedGroupMigrations.count)
+                var i = 0
+                // while migrations and applied migrations are the same
+                while i < minMigrationCount,
+                    appliedGroupMigrations[i].name == groupMigrations[i].name
+                {
+                    i += 1
                 }
-                // if changes are required
-                guard requiresChanges == false else {
+                // Revert migrations in reverse
+                for j in (i..<appliedGroupMigrations.count).reversed() {
+                    let migrationName = appliedGroupMigrations[j].name
+                    // look for migration to revert in registered migration list and revert dictionary.
+                    guard let migration = registeredMigrations[migrationName]
+                    else {
+                        logger.error("Failed to find migration \(migrationName)")
+                        throw DatabaseMigrationError.cannotRevertMigration
+                    }
+                    migrationsToRevert.append(migration)
+                    logger.info("Reverting \(migrationName) from group \(group.name) \(dryRun ? " (dry run)" : "")")
+                }
+            }
+            if dryRun {
+                if migrationsToRevert.count > 0 {
                     throw DatabaseMigrationError.requiresChanges
+                }
+            } else if migrationsToRevert.count > 0 {
+                _ = try await repository.withTransaction(logger: logger) { context in
+                    for migration in migrationsToRevert {
+                        try await migration.revert(
+                            connection: context.connection,
+                            logger: context.logger
+                        )
+                        try await repository.remove(migration, context: context)
+                    }
                 }
             }
         } catch {
@@ -406,15 +410,8 @@ struct PostgresMigrationRepository: Sendable {
         isolation: isolated (any Actor)? = #isolation,
         _ process: (Context) async throws -> Value
     ) async throws -> Value {
-        do {
-            return try await self.client.withTransaction(logger: logger) { connection in
-                try await process(.init(connection: connection, logger: logger))
-            }
-        } catch let error as PostgresTransactionError {
-            if let closureError = error.closureError {
-                throw closureError
-            }
-            throw error
+        try await self.client.withTransaction(logger: logger) { connection in
+            try await process(.init(connection: connection, logger: logger))
         }
     }
     #else
@@ -422,21 +419,14 @@ struct PostgresMigrationRepository: Sendable {
         logger: Logger,
         _ process: (Context) async throws -> Value
     ) async throws -> Value {
-        do {
-            return try await self.client.withTransaction(logger: logger) { connection in
-                try await process(.init(connection: connection, logger: logger))
-            }
-        } catch let error as PostgresTransactionError {
-            if let closureError = error.closureError {
-                throw closureError
-            }
-            throw error
+        try await self.client.withTransaction(logger: logger) { connection in
+            try await process(.init(connection: connection, logger: logger))
         }
     }
     #endif
 
-    func setup(context: Context) async throws {
-        try await self.createMigrationsTable(connection: context.connection, logger: context.logger)
+    func setup(client: PostgresClient, logger: Logger) async throws {
+        try await self.createMigrationsTable(client: client, logger: logger)
     }
 
     func add(_ migration: DatabaseMigration, context: Context) async throws {
@@ -453,10 +443,10 @@ struct PostgresMigrationRepository: Sendable {
         )
     }
 
-    func getAll(context: Context) async throws -> [(name: String, group: DatabaseMigrationGroup)] {
-        let stream = try await context.connection.query(
+    func getAll(client: PostgresClient, logger: Logger) async throws -> [(name: String, group: DatabaseMigrationGroup)] {
+        let stream = try await client.query(
             "SELECT \"name\", \"group\" FROM _hb_pg_migrations ORDER BY \"order\"",
-            logger: context.logger
+            logger: logger
         )
         var result: [(String, DatabaseMigrationGroup)] = []
         for try await (name, group) in stream.decode((String, String).self, context: .default) {
@@ -465,8 +455,8 @@ struct PostgresMigrationRepository: Sendable {
         return result
     }
 
-    private func createMigrationsTable(connection: PostgresConnection, logger: Logger) async throws {
-        try await connection.query(
+    private func createMigrationsTable(client: PostgresClient, logger: Logger) async throws {
+        try await client.query(
             """
             CREATE TABLE IF NOT EXISTS _hb_pg_migrations (
                 "order" SERIAL PRIMARY KEY,

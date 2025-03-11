@@ -123,13 +123,11 @@ final class MigrationTests: XCTestCase {
 
     func getAll(client: PostgresClient, groups: [DatabaseMigrationGroup] = [.default]) async throws -> [String] {
         let repository = PostgresMigrationRepository(client: client)
-        return try await repository.withTransaction(logger: Self.logger) { context in
-            try await repository.getAll(context: context).compactMap { migration in
-                if groups.first(where: { group in group == migration.group }) != nil {
-                    return migration.name
-                } else {
-                    return nil
-                }
+        return try await repository.getAll(client: client, logger: Self.logger).compactMap { migration in
+            if groups.first(where: { group in group == migration.group }) != nil {
+                return migration.name
+            } else {
+                return nil
             }
         }
     }
