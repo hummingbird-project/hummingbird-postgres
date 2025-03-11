@@ -406,8 +406,15 @@ struct PostgresMigrationRepository: Sendable {
         isolation: isolated (any Actor)? = #isolation,
         _ process: (Context) async throws -> Value
     ) async throws -> Value {
-        try await self.client.withTransaction(logger: logger) { connection in
-            try await process(.init(connection: connection, logger: logger))
+        do {
+            return try await self.client.withTransaction(logger: logger) { connection in
+                try await process(.init(connection: connection, logger: logger))
+            }
+        } catch let error as PostgresTransactionError {
+            if let closureError = error.closureError {
+                throw closureError
+            }
+            throw error
         }
     }
     #else
@@ -415,8 +422,15 @@ struct PostgresMigrationRepository: Sendable {
         logger: Logger,
         _ process: (Context) async throws -> Value
     ) async throws -> Value {
-        try await self.client.withTransaction(logger: logger) { connection in
-            try await process(.init(connection: connection, logger: logger))
+        do {
+            return try await self.client.withTransaction(logger: logger) { connection in
+                try await process(.init(connection: connection, logger: logger))
+            }
+        } catch let error as PostgresTransactionError {
+            if let closureError = error.closureError {
+                throw closureError
+            }
+            throw error
         }
     }
     #endif
