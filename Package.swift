@@ -14,7 +14,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.5.0"),
-        .package(url: "https://github.com/vapor/postgres-nio", from: "1.21.0"),
+        .package(url: "https://github.com/vapor/postgres-nio", from: "1.25.0"),
     ],
     targets: [
         .target(
