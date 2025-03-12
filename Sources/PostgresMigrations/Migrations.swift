@@ -53,7 +53,6 @@ public actor DatabaseMigrations {
     /// This is useful for migrations you might have to revert.
     /// - Parameter migration: DatabaseMigration to be registerd
     public func register(_ migration: DatabaseMigration) {
-
         self.reverts[migration.name] = migration
     }
 
@@ -226,8 +225,8 @@ public actor DatabaseMigrations {
     /// so it is best to run this with dryRun set to true before running it without so you know what migrations
     /// it will revert.
     ///
-    /// For a migration to be removed it has to have been registered  using ``DatabaseMigrations.apply(_:)``
-    /// and ``DatabaseMigrations.revert(_:)``.
+    /// For a migration to be removed it has to have been registered  either using ``DatabaseMigrations.apply(_:)``
+    /// and ``DatabaseMigrations.register(_:)``.
     ///
     /// - Parameters:
     ///   - client: Postgres client
