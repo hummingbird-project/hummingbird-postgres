@@ -149,6 +149,20 @@ final class MigrationTests: XCTestCase {
         }
     }
 
+    func testCheckForDuplicates() async throws {
+        let order = TestOrderMigration.Order()
+        try await self.testMigrations { migrations in
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1))
+            await migrations.add(TestOrderMigration(name: "test1", order: order, applyOrder: 1), checkForDuplicates: true)
+        } verify: { migrations, client in
+            try await migrations.apply(client: client, groups: [.default], logger: Self.logger, dryRun: false)
+            order.expect(2)
+            let migrations = try await getAll(client: client)
+            XCTAssertEqual(migrations.count, 1)
+            XCTAssertEqual(migrations[0], "test1")
+        }
+    }
+
     func testRevert() async throws {
         let order = TestOrderMigration.Order()
         try await self.testMigrations { migrations in

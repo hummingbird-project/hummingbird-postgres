@@ -36,7 +36,13 @@ public actor DatabaseMigrations {
 
     /// Add migration to list of migrations to be be applied
     /// - Parameter migration: DatabaseMigration to be applied
-    public func add(_ migration: DatabaseMigration) {
+    public func add(_ migration: DatabaseMigration, checkForDuplicates: Bool = false) {
+        if checkForDuplicates {
+            let existingMigration = self.migrations.first {
+                type(of: $0) == type(of: migration)
+            }
+            guard existingMigration == nil else { return }
+        }
         self.migrations.append(migration)
     }
 
@@ -45,6 +51,7 @@ public actor DatabaseMigrations {
     /// This is useful for migrations you might have to revert.
     /// - Parameter migration: DatabaseMigration to be registerd
     public func register(_ migration: DatabaseMigration) {
+
         self.reverts[migration.name] = migration
     }
 
