@@ -35,7 +35,9 @@ public actor DatabaseMigrations {
     }
 
     /// Add migration to list of migrations to be be applied
-    /// - Parameter migration: DatabaseMigration to be applied
+    /// - Parameters
+    ///   - migration: DatabaseMigration to be applied
+    ///   - checkForDuplicates: Only add migration if it doesn't exist in the list
     public func add(_ migration: DatabaseMigration, checkForDuplicates: Bool = false) {
         if checkForDuplicates {
             let existingMigration = self.migrations.first {
