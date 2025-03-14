@@ -225,8 +225,8 @@ public actor DatabaseMigrations {
     /// so it is best to run this with dryRun set to true before running it without so you know what migrations
     /// it will revert.
     ///
-    /// For a migration to be removed it has to have been registered either using ``DatabaseMigrations.apply(_:)``
-    /// or ``DatabaseMigrations.register(_:)``.
+    /// For a migration to be removed it has to have been registered either using
+    /// ``DatabaseMigrations.add(_:skipDuplicates:)`` or ``DatabaseMigrations.register(_:)``.
     ///
     /// - Parameters:
     ///   - client: Postgres client
