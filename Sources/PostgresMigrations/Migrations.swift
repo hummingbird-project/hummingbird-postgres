@@ -226,7 +226,7 @@ public actor DatabaseMigrations {
     /// it will revert.
     ///
     /// For a migration to be removed it has to have been registered either using
-    /// ``DatabaseMigrations.add(_:skipDuplicates:)`` or ``DatabaseMigrations.register(_:)``.
+    /// ``DatabaseMigrations/add(_:skipDuplicates:)`` or ``DatabaseMigrations/register(_:)``.
     ///
     /// - Parameters:
     ///   - client: Postgres client
