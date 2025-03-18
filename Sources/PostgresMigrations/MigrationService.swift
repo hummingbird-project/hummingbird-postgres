@@ -16,6 +16,7 @@ import Logging
 import PostgresNIO
 import ServiceLifecycle
 
+/// Service that runs a database migration
 public struct DatabaseMigrationService: Service {
     let client: PostgresClient
     let groups: [DatabaseMigrationGroup]
@@ -45,7 +46,7 @@ public struct DatabaseMigrationService: Service {
     }
 
     public func run() async throws {
-        try await migrations.apply(client: self.client, groups: self.groups, logger: self.logger, dryRun: self.dryRun)
+        try await self.migrations.apply(client: self.client, groups: self.groups, logger: self.logger, dryRun: self.dryRun)
         try? await gracefulShutdown()
     }
 }
