@@ -2,6 +2,7 @@ import Atomics
 import Foundation
 import Logging
 import PostgresNIO
+import ServiceLifecycle
 import XCTest
 
 @testable import PostgresMigrations
@@ -421,6 +422,51 @@ final class MigrationTests: XCTestCase {
             await migrations.add(TestMigration(name: "test2"))
         } verify: { migrations, client in
             try await migrations.apply(client: client, groups: [.default, .test], logger: Self.logger, dryRun: false)
+        }
+    }
+
+    func testMigrationService() async throws {
+        struct WaitRevertMigrationService: Service {
+            let client: PostgresClient
+            let migrations: DatabaseMigrations
+            let logger: Logger
+            func run() async throws {
+                try await migrations.waitUntilCompleted()
+                try await migrations.revert(client: client, groups: [.test], logger: logger, dryRun: false)
+            }
+        }
+        let logger = {
+            var logger = Logger(label: "MigrationTests")
+            logger.logLevel = .debug
+            return logger
+        }()
+        let client = try await PostgresClient(
+            configuration: getPostgresConfiguration(),
+            backgroundLogger: logger
+        )
+        let migrations = DatabaseMigrations()
+        await migrations.add(TestMigration(name: "testMigrationService", group: .test))
+        let serviceGroup = ServiceGroup(
+            configuration: .init(
+                services: [
+                    client,
+                    DatabaseMigrationService(
+                        client: client,
+                        migrations: migrations,
+                        groups: [.test],
+                        logger: logger,
+                        dryRun: false
+                    ),
+                    WaitRevertMigrationService(client: client, migrations: migrations, logger: logger),
+                ],
+                gracefulShutdownSignals: [.sigterm, .sigint],
+                logger: logger
+            )
+        )
+        do {
+            try await serviceGroup.run()
+        } catch let error as ServiceGroupError where error == .serviceFinishedUnexpectedly() {
+            // ... we're good
         }
     }
 }
