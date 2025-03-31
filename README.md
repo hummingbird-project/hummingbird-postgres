@@ -25,15 +25,11 @@ Hummingbird postgres provides implementations of the job and persist frameworks 
 Setup run
 ```sh
 docker compose up
-or 
-docker-compose up
 ```
-Tear down
 
+Tear down
 ```sh
 docker compose down
-or
-docker-compose down
 ```
 
 ## Documentation
