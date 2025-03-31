@@ -18,22 +18,18 @@
 
 # Hummingbird Postgres
 
-Hummingbird postgres provides implementations of the job and persist frameworks from Hummingbird and a database migration system all using the `PostgresClient` from PostgresNIO.
+HummingbirdPostgres provides implementations of the persist frameworks from Hummingbird using `PostgresClient` from PostgresNIO.
 
 ## Local Development setup
 
 Setup run
 ```sh
 docker compose up
-or 
-docker-compose up
 ```
-Tear down
 
+Tear down
 ```sh
 docker compose down
-or
-docker-compose down
 ```
 
 ## Documentation
