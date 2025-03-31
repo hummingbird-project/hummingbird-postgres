@@ -9,27 +9,20 @@ let package = Package(
     name: "hummingbird-postgres",
     platforms: [.macOS(.v14), .iOS(.v17), .tvOS(.v17)],
     products: [
-        .library(name: "HummingbirdPostgres", targets: ["HummingbirdPostgres"]),
-        .library(name: "PostgresMigrations", targets: ["PostgresMigrations"]),
+        .library(name: "HummingbirdPostgres", targets: ["HummingbirdPostgres"])
     ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.5.0"),
+        .package(url: "https://github.com/hummingbird-project/postgres-migrations", from: "0.1.0"),
         .package(url: "https://github.com/vapor/postgres-nio", from: "1.25.0"),
     ],
     targets: [
         .target(
             name: "HummingbirdPostgres",
             dependencies: [
-                "PostgresMigrations",
+                .product(name: "PostgresMigrations", package: "postgres-migrations"),
                 .product(name: "Hummingbird", package: "hummingbird"),
                 .product(name: "PostgresNIO", package: "postgres-nio"),
-            ],
-            swiftSettings: swiftSettings
-        ),
-        .target(
-            name: "PostgresMigrations",
-            dependencies: [
-                .product(name: "PostgresNIO", package: "postgres-nio")
             ],
             swiftSettings: swiftSettings
         ),
@@ -38,12 +31,6 @@ let package = Package(
             dependencies: [
                 "HummingbirdPostgres",
                 .product(name: "HummingbirdTesting", package: "hummingbird"),
-            ]
-        ),
-        .testTarget(
-            name: "PostgresMigrationsTests",
-            dependencies: [
-                "PostgresMigrations"
             ]
         ),
     ],
