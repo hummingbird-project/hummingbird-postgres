@@ -18,7 +18,7 @@ jobs:
 #    runs-on: macOS-13
 #    steps:
 #    - name: Checkout
-#      uses: actions/checkout@v4
+#      uses: actions/checkout@v5
 #    - name: SPM tests
 #      run: swift test --enable-code-coverage
 #    - name: Convert coverage files
@@ -74,7 +74,7 @@ jobs:
           POSTGRES_INITDB_ARGS: --auth-host=${{ matrix.postgres-auth }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     - name: Test
       run: |
         swift test --enable-code-coverage
