@@ -13,7 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 import Logging
-import PostgresMigrations
+public import PostgresMigrations
 import PostgresNIO
 
 struct CreatePersistTable: DatabaseMigration {

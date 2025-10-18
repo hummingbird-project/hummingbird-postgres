@@ -1,9 +1,18 @@
-// swift-tools-version: 5.10
+// swift-tools-version: 6.0
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
 
-let swiftSettings: [SwiftSetting] = [.enableExperimentalFeature("StrictConcurrency=complete")]
+let swiftSettings: [SwiftSetting] = [
+    // https://github.com/apple/swift-evolution/blob/main/proposals/0335-existential-any.md
+    .enableUpcomingFeature("ExistentialAny"),
+
+    // https://github.com/swiftlang/swift-evolution/blob/main/proposals/0444-member-import-visibility.md
+    .enableUpcomingFeature("MemberImportVisibility"),
+
+    // https://github.com/swiftlang/swift-evolution/blob/main/proposals/0409-access-level-on-imports.md
+    .enableUpcomingFeature("InternalImportsByDefault"),
+]
 
 let package = Package(
     name: "hummingbird-postgres",
@@ -12,9 +21,9 @@ let package = Package(
         .library(name: "HummingbirdPostgres", targets: ["HummingbirdPostgres"])
     ],
     dependencies: [
-        .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.5.0"),
-        .package(url: "https://github.com/hummingbird-project/postgres-migrations", from: "1.0.0-rc"),
-        .package(url: "https://github.com/vapor/postgres-nio", from: "1.25.0"),
+        .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.16.0"),
+        .package(url: "https://github.com/hummingbird-project/postgres-migrations", from: "1.0.0"),
+        .package(url: "https://github.com/vapor/postgres-nio", from: "1.29.0"),
     ],
     targets: [
         .target(
@@ -33,6 +42,5 @@ let package = Package(
                 .product(name: "HummingbirdTesting", package: "hummingbird"),
             ]
         ),
-    ],
-    swiftLanguageVersions: [.v5, .version("6")]
+    ]
 )
