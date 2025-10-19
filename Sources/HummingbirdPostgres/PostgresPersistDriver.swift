@@ -81,11 +81,13 @@ public final class PostgresPersistDriver: PersistDriver {
         self.logger = logger
         self.tidyUpFrequency = tidyUpFrequency
         self.migrations = migrations
-        await migrations.add(CreatePersistTable())
+        for migration in Self.migrations {
+            await migrations.add(migration)
+        }
     }
 
-    /// Array of migrations, required for persist drivers
-    public static var migrations: [any DatabaseMigration] { [CreatePersistTable()] }
+    /// Migrations required by PostgresPersistDriver
+    public static var migrations: [any DatabaseMigration] { [CreatePersistSchema()] }
 
     /// Create new key. This doesn't check for the existence of this key already so may fail if the key already exists
     public func create(key: String, value: some Codable, expires: Duration?) async throws {
