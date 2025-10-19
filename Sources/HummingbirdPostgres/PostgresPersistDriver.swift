@@ -14,10 +14,11 @@
 
 import AsyncAlgorithms
 import Foundation
-import Hummingbird
+public import Hummingbird
 import NIOCore
-import PostgresMigrations
-import PostgresNIO
+public import PostgresMigrations
+public import PostgresNIO
+import ServiceLifecycle
 
 extension PSQLError {
     public var serverError: PostgresError.Code? {
@@ -53,12 +54,12 @@ public final class PostgresPersistDriver: PersistDriver {
             self.value = value
         }
 
-        init(from decoder: Decoder) throws {
+        init(from decoder: any Decoder) throws {
             let container = try decoder.singleValueContainer()
             self.value = try container.decode(Value.self)
         }
 
-        func encode(to encoder: Encoder) throws {
+        func encode(to encoder: any Encoder) throws {
             var container = encoder.singleValueContainer()
             try container.encode(self.value)
         }
@@ -82,6 +83,9 @@ public final class PostgresPersistDriver: PersistDriver {
         self.migrations = migrations
         await migrations.add(CreatePersistTable())
     }
+
+    /// Array of migrations, required for persist drivers
+    public static var migrations: [any DatabaseMigration] { [CreatePersistTable()] }
 
     /// Create new key. This doesn't check for the existence of this key already so may fail if the key already exists
     public func create(key: String, value: some Codable, expires: Duration?) async throws {
@@ -126,7 +130,7 @@ public final class PostgresPersistDriver: PersistDriver {
     }
 
     /// Get value for key
-    public func get<Object: Codable>(key: String, as object: Object.Type) async throws -> Object? {
+    public func get<Object: Codable & Sendable>(key: String, as object: Object.Type) async throws -> Object? {
         let stream = try await self.client.query(
             "SELECT data, expires FROM _hb_pg_persist WHERE id = \(key)",
             logger: self.logger
@@ -182,3 +186,5 @@ extension PostgresPersistDriver {
         }
     }
 }
+
+extension PostgresPersistDriver.WrapperObject: Sendable where Value: Sendable {}

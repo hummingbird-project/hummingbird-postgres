@@ -38,9 +38,9 @@ jobs:
     strategy:
       matrix:
         image:
-          - 'swift:5.10'
           - 'swift:6.0'
           - 'swift:6.1'
+          - 'swift:6.2'
         postgres-image:
           - 'postgres:17'
           - 'postgres:16'
@@ -86,7 +86,7 @@ jobs:
           -ignore-filename-regex="\/Benchmarks\/" \
           -instr-profile .build/debug/codecov/default.profdata > info.lcov
     - name: Upload to codecov.io
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@v4
       with:
         files: info.lcov
         token: ${{ secrets.CODECOV_TOKEN }}
