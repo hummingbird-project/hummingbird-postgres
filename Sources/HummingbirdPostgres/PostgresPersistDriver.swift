@@ -81,18 +81,20 @@ public final class PostgresPersistDriver: PersistDriver {
         self.logger = logger
         self.tidyUpFrequency = tidyUpFrequency
         self.migrations = migrations
-        await migrations.add(CreatePersistTable())
+        for migration in Self.migrations {
+            await migrations.add(migration)
+        }
     }
 
-    /// Array of migrations, required for persist drivers
-    public static var migrations: [any DatabaseMigration] { [CreatePersistTable()] }
+    /// Migrations required by PostgresPersistDriver
+    public static var migrations: [any DatabaseMigration] { [CreatePersistSchema()] }
 
     /// Create new key. This doesn't check for the existence of this key already so may fail if the key already exists
     public func create(key: String, value: some Codable, expires: Duration?) async throws {
         let expires = expires.map { Date.now + Double($0.components.seconds) } ?? Date.distantFuture
         do {
             try await self.client.query(
-                "INSERT INTO _hb_pg_persist (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(expires))",
+                "INSERT INTO hb_persist.storage (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(expires))",
                 logger: self.logger
             )
         } catch let error as PSQLError {
@@ -110,7 +112,7 @@ public final class PostgresPersistDriver: PersistDriver {
             let expires = Date.now + Double(expires.components.seconds)
             try await self.client.query(
                 """
-                INSERT INTO _hb_pg_persist (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(expires))
+                INSERT INTO hb_persist.storage (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(expires))
                 ON CONFLICT (id)
                 DO UPDATE SET data = \(WrapperObject(value)), expires = \(expires)
                 """,
@@ -120,7 +122,7 @@ public final class PostgresPersistDriver: PersistDriver {
         } else {
             try await self.client.query(
                 """
-                INSERT INTO _hb_pg_persist (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(Date.distantFuture))
+                INSERT INTO hb_persist.storage (id, data, expires) VALUES (\(key), \(WrapperObject(value)), \(Date.distantFuture))
                 ON CONFLICT (id)
                 DO UPDATE SET data = \(WrapperObject(value))
                 """,
@@ -132,7 +134,7 @@ public final class PostgresPersistDriver: PersistDriver {
     /// Get value for key
     public func get<Object: Codable & Sendable>(key: String, as object: Object.Type) async throws -> Object? {
         let stream = try await self.client.query(
-            "SELECT data, expires FROM _hb_pg_persist WHERE id = \(key)",
+            "SELECT data, expires FROM hb_persist.storage WHERE id = \(key)",
             logger: self.logger
         )
         do {
@@ -152,7 +154,7 @@ public final class PostgresPersistDriver: PersistDriver {
     /// Remove key
     public func remove(key: String) async throws {
         try await self.client.query(
-            "DELETE FROM _hb_pg_persist WHERE id = \(key)",
+            "DELETE FROM hb_persist.storage WHERE id = \(key)",
             logger: self.logger
         )
     }
@@ -160,7 +162,7 @@ public final class PostgresPersistDriver: PersistDriver {
     /// tidy up database by cleaning out expired keys
     func tidy() async throws {
         try await self.client.query(
-            "DELETE FROM _hb_pg_persist WHERE expires < \(Date.now)",
+            "DELETE FROM hb_persist.storage WHERE expires < \(Date.now)",
             logger: self.logger
         )
     }

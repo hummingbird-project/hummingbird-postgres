@@ -16,11 +16,12 @@ import Logging
 public import PostgresMigrations
 import PostgresNIO
 
-struct CreatePersistTable: DatabaseMigration {
+struct CreatePersistSchema: DatabaseMigration {
     func apply(connection: PostgresConnection, logger: Logger) async throws {
+        try await connection.query("CREATE SCHEMA IF NOT EXISTS hb_persist;", logger: logger)
         try await connection.query(
             """
-            CREATE TABLE IF NOT EXISTS _hb_pg_persist (
+            CREATE TABLE IF NOT EXISTS hb_persist.storage (
                 "id" text PRIMARY KEY,
                 "data" json NOT NULL,
                 "expires" timestamp with time zone NOT NULL
@@ -32,16 +33,16 @@ struct CreatePersistTable: DatabaseMigration {
 
     func revert(connection: PostgresConnection, logger: Logger) async throws {
         try await connection.query(
-            "DROP TABLE _hb_pg_persist",
+            "DROP SCHEMA hb_persist CASCADE",
             logger: logger
         )
     }
 
-    var name: String { "_Create_Persist_Table_" }
+    var name: String { "_Create_Persist_Schema_" }
     var group: DatabaseMigrationGroup { .persist }
 }
 
 extension DatabaseMigrationGroup {
     /// Persist driver migration group
-    public static var persist: Self { .init("_hb_pg_persist") }
+    public static var persist: Self { .init("_hb_persist") }
 }
