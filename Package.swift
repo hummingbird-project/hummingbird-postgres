@@ -22,7 +22,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.16.0"),
-        .package(url: "https://github.com/hummingbird-project/postgres-migrations", from: "1.0.0"),
+        .package(url: "https://github.com/hummingbird-project/postgres-migrations", from: "1.1.0"),
         .package(url: "https://github.com/vapor/postgres-nio", from: "1.29.0"),
     ],
     targets: [
