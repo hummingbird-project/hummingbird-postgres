@@ -38,9 +38,9 @@ jobs:
     strategy:
       matrix:
         image:
-          - 'swift:6.0'
           - 'swift:6.1'
           - 'swift:6.2'
+          - 'swift:6.3'
         postgres-image:
           - 'postgres:17'
           - 'postgres:16'
