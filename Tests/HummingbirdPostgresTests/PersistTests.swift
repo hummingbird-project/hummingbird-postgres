@@ -79,6 +79,10 @@ final class PersistTests: XCTestCase {
             guard let tag = context.parameters.get("tag", as: String.self) else { throw HTTPError(.badRequest) }
             return try await persist.get(key: tag, as: String.self)
         }
+        router.get("/persist/:tag/ttl") { _, context -> String? in
+            guard let tag = context.parameters.get("tag", as: String.self) else { throw HTTPError(.badRequest) }
+            return try await persist.getWithTTL(key: tag, as: String.self).ttl.map { String($0.components.seconds) }
+        }
         router.delete("/persist/:tag") { _, context -> HTTPResponse.Status in
             guard let tag = context.parameters.get("tag", as: String.self) else { throw HTTPError(.badRequest) }
             try await persist.remove(key: tag)
@@ -181,6 +185,19 @@ final class PersistTests: XCTestCase {
             try await client.execute(uri: "/persist/\(tag2)", method: .get) { response in
                 let body = try XCTUnwrap(response.body)
                 XCTAssertEqual(String(buffer: body), "ThisIsTest2")
+            }
+        }
+    }
+
+    func testTTL() async throws {
+        let app = try await Self.createApplication()
+        try await app.test(.router) { client in
+            let tag1 = UUID().uuidString
+
+            try await client.execute(uri: "/persist/\(tag1)/10", method: .put, body: ByteBufferAllocator().buffer(string: "ThisIsTest2")) { _ in }
+            try await client.execute(uri: "/persist/\(tag1)/ttl", method: .get) { response in
+                let ttl = try XCTUnwrap(Int(String(buffer: response.body)))
+                XCTAssert(ttl <= 10 && ttl > 1)
             }
         }
     }

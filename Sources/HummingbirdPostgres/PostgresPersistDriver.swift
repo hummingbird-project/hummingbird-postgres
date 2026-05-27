@@ -151,6 +151,31 @@ public final class PostgresPersistDriver: PersistDriver {
         }
     }
 
+    /// Get value for key
+    public func getWithTTL<Object: Codable & Sendable>(key: String, as object: Object.Type) async throws -> (object: Object?, ttl: Duration?) {
+        let stream = try await self.client.query(
+            "SELECT data, expires FROM hb_persist.storage WHERE id = \(key)",
+            logger: self.logger
+        )
+        do {
+            guard
+                let (object, expires) = try await stream.decode((WrapperObject<Object>, Date).self)
+                    .first(where: { _ in true })
+            else {
+                return (nil, nil)
+            }
+            let now = Date.now
+            guard expires > now else { return (nil, nil) }
+            if expires == Date.distantFuture {
+                return (object.value, nil)
+            } else {
+                return (object.value, .seconds(expires.timeIntervalSince(now)))
+            }
+        } catch is DecodingError {
+            throw PersistError.invalidConversion
+        }
+    }
+
     /// Remove key
     public func remove(key: String) async throws {
         try await self.client.query(
