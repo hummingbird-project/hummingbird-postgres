@@ -3,19 +3,49 @@ name: Swift nightly build
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   linux:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       matrix:
-        image: ['nightly-focal', 'nightly-jammy', 'nightly-amazonlinux2']
-    
+        image: ['nightly-jammy', 'nightly-noble', 'nightly-amazonlinux2023']
+        postgres-image:
+            - "postgres:17"
+            - "postgres:14"
+        include:
+            - postgres-image: postgres:17
+              postgres-auth: scram-sha-256
+            - postgres-image: postgres:14
+              postgres-auth: md5
+
     container:
       image: swiftlang/swift:${{ matrix.image }}
+      volumes: ["pgrunshare:/var/run/postgresql"]
+      env:
+          POSTGRES_DB: "test_database"
+          POSTGRES_USER: "test_user"
+          POSTGRES_PASSWORD: "test_password"
+          POSTGRES_HOSTNAME: "psql"
+          POSTGRES_SOCKET: "/var/run/postgresql/.s.PGSQL.5432"
+          POSTGRES_HOST_AUTH_METHOD: ${{ matrix.postgres-auth }}
+    services:
+        psql:
+            image: ${{ matrix.postgres-image }}
+            volumes: ["pgrunshare:/var/run/postgresql"]
+            env:
+                POSTGRES_DB: "test_database"
+                POSTGRES_USER: "test_user"
+                POSTGRES_PASSWORD: "test_password"
+                POSTGRES_HOST_AUTH_METHOD: ${{ matrix.postgres-auth }}
+                POSTGRES_INITDB_ARGS: --auth-host=${{ matrix.postgres-auth }}
+
     steps:
     - name: Checkout
-      uses: actions/checkout@v7
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
     - name: Test
       run: |
         swift test
