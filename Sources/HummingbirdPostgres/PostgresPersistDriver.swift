@@ -13,12 +13,17 @@
 //===----------------------------------------------------------------------===//
 
 import AsyncAlgorithms
-import Foundation
 public import Hummingbird
 import NIOCore
 public import PostgresMigrations
 public import PostgresNIO
 import ServiceLifecycle
+
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
+import Foundation
+#endif
 
 extension PSQLError {
     public var serverError: PostgresError.Code? {
